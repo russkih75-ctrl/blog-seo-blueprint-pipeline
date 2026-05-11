@@ -1,8 +1,13 @@
+import { config } from "dotenv";
 import { spawn } from "node:child_process";
 import { mkdirSync, openSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root =
-	"C:\\Users\\User\\Desktop\\Курсор полезныеинструменты\\Артура\\Автоматизация курсор\\blog-seo-blueprint-pipeline";
+const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+config({ path: path.join(root, ".env") });
+const mcpDot = process.env.MCP_KV_DOTENV_PATH?.trim();
+if (mcpDot) config({ path: path.resolve(root, mcpDot), override: true });
 
 mkdirSync(`${root}\\artifacts`, { recursive: true });
 const topic =

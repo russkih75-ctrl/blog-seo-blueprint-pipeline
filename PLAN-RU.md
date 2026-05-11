@@ -5,9 +5,10 @@
 1. Положить файл `*.blueprint.json` от Make (как в Downloads).
 2. Выполнить `npm install` в каталоге `blog-seo-blueprint-pipeline`.
 3. Запустить экстрактор: `npm run extract -- "<путь к json>"` — появится `prompts/_extracted/` с **всеми** текстами промптов.
-4. Скопировать `.env.example` → `.env`; нужны только **`CURSOR_API_KEY`** и **`CLOUD_REPO_URL`**. Сервер **mcp-kv** достаточно включить в Cursor (**cursor.com/agents** или командные MCP) — отдельный `MCP_KV_HTTP_URL` не обязателен.
-5. Запустить: `npm run workflow:cloud -- "тема черновика"` (аналог ячейки A1).
-6. Проверить `artifacts/pipeline-state.json` и логи MCP на финальном шаге WordPress.
+4. Скопировать `.env.example` → `.env` и **`.env.mcp.example` → `.env.mcp.local`** (локальные секреты mcp-kv), в `.env` указать строку **`MCP_KV_DOTENV_PATH=.env.mcp.local`**. Обязательны **`CURSOR_API_KEY`**, **`CLOUD_REPO_URL`**, переменные **HTTP MCP** из ЛК [mcp-kv.ru](https://mcp-kv.ru/). Диагностика: **`npm run check:cloud-setup`** — репозиторий GitHub должен быть добавлен к Cursor для того же аккаунта, что выдал API‑ключ иначе Cloud выдаёт `Failed to verify … branch main`).
+5. (Опционально) **`CLOUD_REQUIRE_MCP_KV_HTTP=true`** после заполнения `MCP_KV_HTTP_URL` — скрипт не стартует без HTTP MCP на Cloud.
+6. Запустить: `npm run workflow:cloud -- "тема черновика"`.
+7. Проверить `artifacts/pipeline-state.json` и логи MCP на финальном шаге WordPress.
 
 Исходник — экспорт blueprint Make.com из JSON (`*.blueprint.json`). Ниже — **как в исходной сцене до развилки на соцсети**.
 
@@ -41,7 +42,7 @@
 | Загрузка файла из URL в WP | `wordpress_upload_media` |
 | Аплоад Featured и пост | `wordpress_upload_image_from_url`, `wordpress_create_post`, blob-цепочка и т.д. (правила MCP-KV см. ваш кабинет mcp-kv.ru) |
 
-Подключение **HTTP MCP URL в `.env`** нужно только если вы хотите передать ключ серверу из скрипта; при типичной настройке Cursor достаточно **dashboard MCP** для облачных агентов.
+Подключение **HTTP MCP** с mcp-kv.ru в `.env` / `.env.mcp.local` нужно для того, чтобы **`@cursor/sdk` передавал `mcp_servers` в Cursor Cloud** из этой машины. Только dashboard MCP без URL в скрипте для CLI часто не попадает в агент Cloud.
 
 Развилка Make (VK, Threads, Telegram, Pinterest и др.) в этой репозиторной автоматизации **не реализована** — можно добавить отдельными шагами по извлечённым промптам в `prompts/_extracted/045_*.md …`.
 

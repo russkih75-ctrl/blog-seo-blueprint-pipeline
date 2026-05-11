@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 config({ path: path.join(root, ".env") });
+const mcpExtra = process.env.MCP_KV_DOTENV_PATH?.trim();
+if (mcpExtra) config({ path: path.resolve(root, mcpExtra), override: true });
 
 const topic =
 	process.argv.slice(2).join(" ") ||

@@ -1,7 +1,7 @@
-import "dotenv/config";
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, existsSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { Agent, CursorAgentError } from "@cursor/sdk";
+import { config as loadEnv } from "dotenv";
+import { Agent, Cursor, CursorAgentError } from "@cursor/sdk";
 import {
   DEFAULT_BANNER_IN_ARTICLE,
   DEFAULT_NANO_REFERENCE_IMAGE_URLS,
@@ -14,10 +14,38 @@ import {
 import { findExtractedMarkdown } from "./workflow-paths.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
+loadEnv({ path: path.join(ROOT, ".env") });
+const mcpKvDotenvRel = process.env.MCP_KV_DOTENV_PATH?.trim();
+if (mcpKvDotenvRel)
+  loadEnv({ path: path.resolve(ROOT, mcpKvDotenvRel), override: true });
+
+const mcpKvUrlFile = process.env.MCP_KV_HTTP_URL_FILE?.trim();
+if (mcpKvUrlFile) {
+  const uf = path.resolve(ROOT, mcpKvUrlFile);
+  if (existsSync(uf)) {
+    const line = readFileSync(uf, "utf-8").trim().split(/\r?\n/)[0]?.trim();
+    if (line) process.env.MCP_KV_HTTP_URL = line;
+  }
+}
+const mcpKvBearerFile = process.env.MCP_KV_HTTP_BEARER_FILE?.trim();
+if (mcpKvBearerFile) {
+  const bf = path.resolve(ROOT, mcpKvBearerFile);
+  if (existsSync(bf)) {
+    const line = readFileSync(bf, "utf-8").trim().split(/\r?\n/)[0]?.trim();
+    if (line) process.env.MCP_KV_HTTP_BEARER = line;
+  }
+}
+
 const EXTRACTED = path.join(ROOT, "prompts", "_extracted");
 const ART = path.join(ROOT, "artifacts");
 
 let loggedLocalRuntime = false;
+
+function useLocalAgent(): boolean {
+  return (
+    String(process.env.WORKFLOW_RUNTIME ?? "").toLowerCase() === "local"
+  );
+}
 
 type SdkAgentOptions = NonNullable<Parameters<typeof Agent.prompt>[1]>;
 
@@ -40,6 +68,83 @@ function assumeDashboardMcp(): boolean {
   return (
     String(process.env.MCP_ASSUME_CURSOR_DASHBOARD ?? "true").toLowerCase() !==
     "false"
+  );
+}
+
+/** Сопоставляет owner/repo между CLOUD_REPO_URL и ответами Cursor.repositories.list */
+function normalizeGithubRepoKey(raw: string): string {
+  const s = raw.trim().replace(/\.git$/i, "").replace(/\/+$/, "");
+  if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(s))
+    return `github.com/${s.toLowerCase()}`;
+  const withScheme = /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(s) ? s : `https://${s}`;
+  try {
+    const u = new URL(withScheme);
+    if (/\.?github\.com$/i.test(u.hostname)) {
+      const p = u.pathname.replace(/^\/+|\/+$/g, "").toLowerCase();
+      return `github.com/${p}`;
+    }
+  } catch {
+    /* noop */
+  }
+  const scp = /^git@github\.com:([^:]+)$/i.exec(s);
+  if (scp)
+    return `github.com/${scp[1].replace(/\.git$/i, "").toLowerCase()}`;
+  return s.toLowerCase();
+}
+
+async function assertCloudRepositoryLinked(): Promise<void> {
+  if (useLocalAgent()) return;
+  if (
+    String(process.env.CLOUD_SKIP_REPO_CHECK ?? "").toLowerCase() === "true"
+  ) {
+    console.warn(
+      "[cloud] CLOUD_SKIP_REPO_CHECK=true — пропуск проверки GitHub ↔ Cursor.",
+    );
+    return;
+  }
+  const apiKey = process.env.CURSOR_API_KEY?.trim();
+  const repoRaw = process.env.CLOUD_REPO_URL?.trim();
+  if (!apiKey || !repoRaw) return;
+  let repos: Awaited<ReturnType<typeof Cursor.repositories.list>>;
+  try {
+    repos = await Cursor.repositories.list({ apiKey });
+  } catch (e) {
+    console.warn(
+      "[cloud] Не удалось вызвать Cursor.repositories.list (сеть/API):",
+      e,
+    );
+    return;
+  }
+  const want = normalizeGithubRepoKey(repoRaw);
+  const ok = repos.some((r) => normalizeGithubRepoKey(r.url) === want);
+  if (ok) {
+    console.error(
+      `[cloud] Репозиторий совпадает с подключённым к Cursor (${repos.length} записей в списке).`,
+    );
+    return;
+  }
+  const hint =
+    repos.length === 0
+      ? "Список репозиториев Cursor пуст — откройте https://cursor.com/dashboard → интеграция GitHub и добавьте этот репозиторий (или всю организацию)."
+      : `Подключены другие репозитории: ${repos.map((x) => x.url).join(", ")}`;
+
+  throw new Error(
+    `[cloud] Репозиторий CLOUD_REPO_URL=${repoRaw} не найден среди проектов, связанных с этим Cursor API ключом.\n${hint}\nДиагностика: npm run check:cloud-setup`,
+  );
+}
+
+function cloudRequiresInlineMcpKv(): boolean {
+  if (useLocalAgent()) return false;
+  return (
+    String(process.env.CLOUD_REQUIRE_MCP_KV_HTTP ?? "").toLowerCase() === "true"
+  );
+}
+
+function assertInlineMcpForCloud(): void {
+  if (!cloudRequiresInlineMcpKv()) return;
+  if (envMcpKv()) return;
+  throw new Error(
+    `[cloud] CLOUD_REQUIRE_MCP_KV_HTTP=true, но MCP_KV_HTTP_URL пуст.\nЗаполните HTTP endpoint mcp-kv из ЛК https://mcp-kv.ru/ (и Bearer при необходимости).\nПодсказка: скопируйте .env.mcp.example → .env.mcp.local и MCP_KV_DOTENV_PATH=.env.mcp.local\nЛибо снимите требование: CLOUD_REQUIRE_MCP_KV_HTTP=false`,
   );
 }
 
@@ -162,12 +267,6 @@ function stripBlueprintHeader(md: string): string {
   return md;
 }
 
-/** Cloud требует, чтобы репо было в Cursor → repositories (см. scripts/list-cursor-repositories.mjs). */
-function useLocalAgent(): boolean {
-  return (
-    String(process.env.WORKFLOW_RUNTIME ?? "").toLowerCase() === "local"
-  );
-}
 
 async function cursorCloud(prompt: string, label: string): Promise<string> {
   const apiKey = ensureEnv("CURSOR_API_KEY");
@@ -439,15 +538,28 @@ async function main(): Promise<void> {
     );
   }
 
+  await assertCloudRepositoryLinked();
+  assertInlineMcpForCloud();
+
   const useWordstatMcp =
     String(process.env.WORDSTAT_USE_MCP ?? "true").toLowerCase() !== "false";
   const useSurrogateOnly =
     String(process.env.WORDSTAT_FALLBACK_SURROGATE_ONLY ?? "").toLowerCase() === "true";
 
   const inlineKvUrl = !!envMcpKv();
-  if (!inlineKvUrl && assumeDashboardMcp()) {
+  if (!useLocalAgent()) {
+    if (inlineKvUrl) {
+      console.error(
+        "[mcp] HTTP mcp-kv: MCP_KV_HTTP_URL передаётся в Cloud через @cursor/sdk (inline mcp_servers).",
+      );
+    } else {
+      console.warn(
+        "[mcp] Cloud: MCP_KV_HTTP_URL пуст — из CLI инструменты mcp-kv часто недоступны. Возьмите endpoint/Bearer в ЛК https://mcp-kv.ru/ и см. .env.mcp.example, затем CLOUD_REQUIRE_MCP_KV_HTTP=true.",
+      );
+    }
+  } else if (!inlineKvUrl && assumeDashboardMcp()) {
     console.error(
-      "[mcp] Inline URL не указан — инструменты **mcp-kv** берутся из подключения Cursor (cursor.com/agents / команда). Убедитесь, что там включён ваш сервер.",
+      "[mcp] Локальный режим без MCP_KV_HTTP_URL — у локального Agent через SDK часто нет MCP; см. MCP_KV_DOTENV_PATH или HTTP URL.",
     );
   }
 
@@ -671,7 +783,7 @@ STATUS=${publishStatus} TYPE=${postType}
 Если документ огромный — blob (wordpress_content_blob_append → wordpress_create_post_from_blob).
 Итого в ответ: ID записи и URL страницы, либо честная ошибка инструмента.
 
-Используй инструменты WordPress из уже подключённого MCP (**wordpress_*** и др.). Если их нет — сообщи явно в ответе.
+Используй инструменты **wordpress_*** через MCP (конфиг mcp_servers с именем mcp_kv или Cloud‑MCP Cursor). Если недоступны — сообщи явно в ответе.
 `;
 
   await cursorCloud(wpFinalPrompt, "FINAL publish WordPress MCP");

@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "extract": "node scripts/extract-blueprint-prompts.mjs",
-    "check:crsr-repos": "node scripts/list-cursor-repositories.mjs",
+    "check:crsr-repos": "node scripts/cloud-setup-check.mjs",
+    "check:cloud-setup": "node scripts/cloud-setup-check.mjs",
     "workflow:cloud": "node --import tsx src/run-workflow-cloud.ts",
     "workflow:run": "node scripts/run-workflow.mjs",
     "build": "tsc"
