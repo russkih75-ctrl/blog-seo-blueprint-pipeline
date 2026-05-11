@@ -17,6 +17,8 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const EXTRACTED = path.join(ROOT, "prompts", "_extracted");
 const ART = path.join(ROOT, "artifacts");
 
+let loggedLocalRuntime = false;
+
 type SdkAgentOptions = NonNullable<Parameters<typeof Agent.prompt>[1]>;
 
 function ensureEnv(name: string): string {
@@ -160,26 +162,51 @@ function stripBlueprintHeader(md: string): string {
   return md;
 }
 
+/** Cloud требует, чтобы репо было в Cursor → repositories (см. scripts/list-cursor-repositories.mjs). */
+function useLocalAgent(): boolean {
+  return (
+    String(process.env.WORKFLOW_RUNTIME ?? "").toLowerCase() === "local"
+  );
+}
+
 async function cursorCloud(prompt: string, label: string): Promise<string> {
   const apiKey = ensureEnv("CURSOR_API_KEY");
-  const repoUrl = ensureEnv("CLOUD_REPO_URL");
-  const ref = (process.env.CLOUD_REPO_REF || "main").trim();
-  const autoPr =
-    String(process.env.CLOUD_AUTO_CREATE_PR || "false").toLowerCase() === "true";
-  const skipReviewer =
-    String(process.env.CLOUD_SKIP_REVIEWER_REQUEST ?? "true").toLowerCase() !==
-    "false";
   const modelId = process.env.CURSOR_MODEL?.trim();
 
-  const opts: SdkAgentOptions = {
-    apiKey,
-    cloud: {
+  /** Локально модель нужна явно (@cursor/sdk). */
+  if (useLocalAgent() && !modelId) {
+    throw new Error(
+      "Для WORKFLOW_RUNTIME=local задайте CURSOR_MODEL (например composer-2) в .env",
+    );
+  }
+
+  /** @type SdkAgentOptions */
+  const opts: SdkAgentOptions = { apiKey };
+
+  if (useLocalAgent()) {
+    opts.local = { cwd: ROOT };
+    if (!loggedLocalRuntime) {
+      loggedLocalRuntime = true;
+      console.error(
+        `[runtime] LOCAL — агент в каталоге ${ROOT} (не Cloud). Для MCP через SDK укажите MCP_KV_HTTP_URL или настройте Cursor локально.`,
+      );
+    }
+  } else {
+    const repoUrl = ensureEnv("CLOUD_REPO_URL");
+    const ref = (process.env.CLOUD_REPO_REF || "main").trim();
+    const autoPr =
+      String(process.env.CLOUD_AUTO_CREATE_PR || "false").toLowerCase() === "true";
+    const skipReviewer =
+      String(process.env.CLOUD_SKIP_REVIEWER_REQUEST ?? "true").toLowerCase() !==
+      "false";
+    opts.cloud = {
       repos: [{ url: repoUrl, startingRef: ref }],
       autoCreatePR: autoPr,
       skipReviewerRequest: skipReviewer,
-    },
-    ...(modelId ? { model: { id: modelId } } : {}),
-  };
+    };
+  }
+
+  if (modelId) opts.model = { id: modelId };
 
   attachMcpServers(opts);
 
