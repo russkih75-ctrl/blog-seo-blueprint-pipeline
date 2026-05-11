@@ -18,7 +18,7 @@ npm install
 npm run extract -- "C:\полный\путь\к\файлу.blueprint.json"
 ```
 
-3. Настройте `.env` из `.env.example`: минимум **`CURSOR_API_KEY`**, **`CLOUD_REPO_URL`**. Убедитесь, что **mcp-kv** включён в Cursor для облачных агентов.
+3. Настройте `.env` из `.env.example`: минимум **`CURSOR_API_KEY`**, **`CLOUD_REPO_URL`**, желательно **`CURSOR_MODEL=composer-2`**. Убедитесь, что **mcp-kv** включён в Cursor для облачных агентов.
 
 4. Запустите цепочку:
 
