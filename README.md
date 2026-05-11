@@ -26,8 +26,15 @@ npm run extract -- "C:\полный\путь\к\файлу.blueprint.json"
 npm run workflow:cloud -- "Тема статьи как в ячейке Google Sheets A1"
 ```
 
+Опционально: длинный прогон в фоне (лог в `artifacts/workflow-last-run.log`):
+
+```bash
+node scripts/start-workflow-bg.mjs "Тема статьи"
+```
+
 Промежуточное состояние: `artifacts/pipeline-state.json`.
 
 ## Ограничения
 
+- **Cursor Cloud Background Agent**: при ошибке вида `[usage_limit_exceeded]` нужно включить **usage-based pricing** и **Spend Limit** в [настройках Cursor](https://www.cursor.com/dashboard?tab=settings) (для Background Agent нужен остаток лимита, обычно не менее ~\$2 до hard limit).
 - Ветки Router Make (VK, Pinterest, …) не подключены; промпты лежат в `prompts/_extracted/` после extract.
