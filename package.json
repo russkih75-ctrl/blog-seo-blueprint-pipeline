@@ -1,0 +1,20 @@
+{
+  "name": "blog-seo-blueprint-pipeline",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "extract": "node scripts/extract-blueprint-prompts.mjs",
+    "workflow:cloud": "node --import tsx src/run-workflow-cloud.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@cursor/sdk": "^1.0.12",
+    "dotenv": "^16.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.17.7",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2"
+  }
+}
