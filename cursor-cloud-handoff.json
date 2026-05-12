@@ -1,0 +1,79 @@
+{
+  "meta": {
+    "title": "Передача контекста: pipeline SEO/GEO → Cursor Cloud + mcp-kv",
+    "created_for": "облачный агент Cursor (Background / Cloud Agents)",
+    "project_name": "blog-seo-blueprint-pipeline",
+    "repository": "https://github.com/russkih75-ctrl/blog-seo-blueprint-pipeline",
+    "language": "ru"
+  },
+  "purpose": {
+    "why": "Автоматизировать цепочку по Make-blueprint «RU SEO/GEO СТАТЬИ ДЛЯ БЛОГА 2026»: семена ключей → Яндекс Wordstat (mcp-kv) → SEO-заголовок → Nano (обложка/баннер) → исследование → HTML статьи → мета → публикация в WordPress через инструменты wordpress_* на том же MCP (mcp-kv).",
+    "how": "Скрипт на Node/TypeScript вызывает Cursor Cloud через пакет @cursor/sdk (Agent.prompt) с привязкой репозитория GitHub; MCP mcp-kv передаётся в опциях агента как HTTP или SSE endpoint."
+  },
+  "what_we_used": {
+    "runtime": ["Node.js 18+", "TypeScript", "tsx"],
+    "sdk": "@cursor/sdk (^1.0.12)",
+    "mcp": "Сервер mcp-kv (Wordstat: wordstat_get_top_requests; изображения: nano_banana_pro / nano_banana_2; WordPress: wordpress_* и blob-потоки для больших постов)",
+    "infra": [
+      "Репозиторий на GitHub (origin), ветка main",
+      "Локальный .env (не в git) с CURSOR_API_KEY и CLOUD_REPO_URL",
+      "Файл пользователя %USERPROFILE%\\.cursor\\mcp.json с записью mcp-kv (SSE URL) — скрипт может подхватить URL автоматически"
+    ],
+    "cli_commands": [
+      "npm install",
+      "npm run extract -- \"<путь к .blueprint.json>\"",
+      "npm run check:cloud-setup",
+      "npm run workflow:cloud -- \"тема статьи\"",
+      "npm run workflow:run -- \"тема\" (обёртка с загрузкой .env)"
+    ]
+  },
+  "completed": [
+    "Репозиторий создан и запушен на GitHub (private → public при необходимости для проверок).",
+    "Парсер Make: scripts/extract-blueprint-prompts.mjs → prompts/_extracted/*.md.",
+    "Основной пайплайн: src/run-workflow-cloud.ts — последовательные шаги Agent.prompt, состояние в artifacts/pipeline-state.json.",
+    "Режим WORKFLOW_RUNTIME=local для отладки без Cloud (локальный агент, cwd = корень проекта).",
+    "Модель Cloud по умолчанию в документации: CURSOR_MODEL=composer-2.",
+    "Автозагрузка mcp-kv: если MCP_KV_HTTP_URL пуст, URL берётся из ~/.cursor/mcp.json (ключи mcp-kv / mcp_kv / mcpkv); для URL с /sse/ в SDK передаётся type: \"sse\", иначе http; headers из JSON подмешиваются.",
+    "Проверка перед Cloud: Cursor.repositories.list vs CLOUD_REPO_URL (нормализация github.com/owner/repo).",
+    "Опционально CLOUD_REQUIRE_MCP_KV_HTTP=true — не стартовать Cloud без явного MCP endpoint в env/файлах.",
+    "Скрипт диагностики: npm run check:cloud-setup (алиас check:crsr-repos).",
+    "Документация: README.md, PLAN-RU.md; примеры .env.example, .env.mcp.example.",
+    "Тестовый локальный прогон (local) с сохранением pipeline-state.json."
+  ],
+  "remaining": [
+    {
+      "item": "Подключить GitHub-репозиторий к аккаунту Cursor",
+      "detail": "В Cursor Dashboard → Settings / Integrations → GitHub добавить russkih75-ctrl/blog-seo-blueprint-pipeline (или организацию целиком). Иначе Cloud API возвращает ошибку проверки ветки main (validation_error / Failed to verify branch). Сейчас check:cloud-setup может показывать пустой список repositories.",
+      "owner_action": "одноразовый вход/разрешение в браузере (OAuth), без этого не обойти скриптом"
+    },
+    {
+      "item": "Биллинг Cursor для Background / Cloud Agent",
+      "detail": "Включить usage-based pricing и Spend Limit при ошибке [usage_limit_exceeded] (нужен остаток лимита до hard limit, ориентир ~ от $2)."
+    },
+    {
+      "item": "Убедиться, что mcp-kv доступен облачному агенту",
+      "detail": "URL уже может подставляться из ~/.cursor/mcp.json автоматически; при необходимости явно задать MCP_KV_HTTP_URL и MCP_KV_HTTP_BEARER в .env или в .env.mcp.local + MCP_KV_DOTENV_PATH."
+    },
+    {
+      "item": "Сменить скомпрометированный ключ",
+      "detail": "CURSOR_API_KEY светился в чате — рекомендуется перевыпустить ключ в Cursor и обновить только локальный .env."
+    },
+    {
+      "item": "Опционально: CLOUD_REQUIRE_MCP_KV_HTTP=true после заполнения MCP URL — жёсткая проверка перед стартом."
+    }
+  ],
+  "files_to_know": [
+    { "path": "src/run-workflow-cloud.ts", "role": "логика шагов, загрузка .env, hydrate из mcp.json, attachMcpServers, Cloud vs local" },
+    { "path": "src/assets.ts", "role": "константы имён инструментов MCP" },
+    { "path": "src/workflow-paths.ts", "role": "поиск извлечённых промптов по id модуля" },
+    { "path": "scripts/cloud-setup-check.mjs", "role": "preflight: репозитории Cursor + MCP" },
+    { "path": ".env.example", "role": "шаблон переменных окружения" },
+    { "path": ".env.mcp.example", "role": "шаблон секретов MCP в отдельном локальном файле" }
+  ],
+  "hints_for_cloud_agent": [
+    "Не коммитить .env и .env.mcp.local; при клоне репозитория скопировать .env.example и заполнить секреты.",
+    "Приоритет MCP: явные переменные окружения → MCP_KV_DOTENV_PATH → авточтение %USERPROFILE%/.cursor/mcp.json.",
+    "Для SSE endpoint mcp-kv используется type sse в mcpServers.",
+    "Если репозиторий не в списке Cursor.repositories.list — исправление только через Dashboard пользователя, не кодом."
+  ]
+}
