@@ -1,4 +1,6 @@
 /** Проверка перед Cursor Cloud: GitHub ↔ Cursor + (опционально) HTTP MCP mcp-kv. */
+import { readFileSync, existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { config } from "dotenv";
 import { Cursor } from "@cursor/sdk";
 import path from "node:path";
@@ -11,7 +13,31 @@ function loadProjectsEnv() {
 	const extra = process.env.MCP_KV_DOTENV_PATH?.trim();
 	if (extra) config({ path: path.resolve(root, extra), override: true });
 }
+
+/** Как в run-workflow-cloud.ts — подхват URL из IDE (%USERPROFILE%\.cursor\mcp.json). */
+function hydrateFromCursorMcpJson() {
+	if (process.env.MCP_KV_HTTP_URL?.trim()) return;
+	const custom = process.env.CURSOR_MCP_JSON_PATH?.trim();
+	const jsonPath = custom
+		? path.isAbsolute(custom)
+			? custom
+			: path.resolve(root, custom)
+		: path.join(homedir(), ".cursor", "mcp.json");
+	if (!existsSync(jsonPath)) return;
+	try {
+		const raw = JSON.parse(readFileSync(jsonPath, "utf8"));
+		const s =
+			raw.mcpServers?.["mcp-kv"] ??
+			raw.mcpServers?.mcp_kv ??
+			raw.mcpServers?.mcpkv;
+		const u = s?.url?.trim();
+		if (u) process.env.MCP_KV_HTTP_URL = u;
+	} catch {
+		/* noop */
+	}
+}
 loadProjectsEnv();
+hydrateFromCursorMcpJson();
 
 function normalizeGithubRepoKey(raw) {
 	const s = raw.trim().replace(/\.git$/i, "").replace(/\/+$/, "");
@@ -79,12 +105,12 @@ try {
 		console.log(" MCP_KV_HTTP_URL задан — инструменты будут проброшены в Cloud из скрипта.");
 	} else if (requireHttp) {
 		console.error(
-			" CLOUD_REQUIRE_MCP_KV_HTTP=true, но MCP_KV_HTTP_URL пустой.\n Возьмите endpoint в ЛК https://mcp-kv.ru/ или скопируйте `.env.mcp.example` → `.env.mcp.local` и MCP_KV_DOTENV_PATH=.env.mcp.local",
+			" CLOUD_REQUIRE_MCP_KV_HTTP=true, но MCP_KV_HTTP_URL пустой после .env и после подхвата из ~/.cursor/mcp.json.",
 		);
 		if (process.exitCode === 0) process.exitCode = 3;
 	} else {
 		console.warn(
-			" MCP_KV_HTTP_URL не задан. Для надёжного Cloud через `@cursor/sdk` рекомендуется HTTP MCP из ЛК mcp-kv.ru и переменная CLOUD_REQUIRE_MCP_KV_HTTP=true после заполнения URL.",
+			" MCP_KV_HTTP_URL не задан и не найден в ~/.cursor/mcp.json — см. ЛК mcp-kv.ru или добавьте сервер mcp-kv в Cursor (локальный mcp.json).",
 		);
 	}
 

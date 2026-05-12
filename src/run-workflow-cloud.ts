@@ -1,4 +1,5 @@
 import { mkdirSync, readFileSync, existsSync, readdirSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 import { config as loadEnv } from "dotenv";
 import { Agent, Cursor, CursorAgentError } from "@cursor/sdk";
@@ -35,6 +36,51 @@ if (mcpKvBearerFile) {
     if (line) process.env.MCP_KV_HTTP_BEARER = line;
   }
 }
+
+/** Заголовки MCP из ~/.cursor/mcp.json (если были) */
+let gCursorMcpKvHeaders: Record<string, string> | undefined;
+
+function cursorMcpJsonPathForUser(): string {
+  const custom = process.env.CURSOR_MCP_JSON_PATH?.trim();
+  if (custom)
+    return path.isAbsolute(custom) ? custom : path.resolve(ROOT, custom);
+  return path.join(homedir(), ".cursor", "mcp.json");
+}
+
+/**
+ * Если MCP_KV_HTTP_URL не задан — подставляем URL из локального Cursor
+ * `~/.cursor/mcp.json` (секрет в URL не коммитится; файл только у вас на ПК).
+ */
+function hydrateMcpKvFromCursorMcpJson(): void {
+  if (envMcpKv()) return;
+  const jsonPath = cursorMcpJsonPathForUser();
+  if (!existsSync(jsonPath)) return;
+  try {
+    const raw = JSON.parse(readFileSync(jsonPath, "utf-8")) as {
+      mcpServers?: Record<
+        string,
+        { url?: string; headers?: Record<string, string>; transport?: string }
+      >;
+    };
+    const s =
+      raw.mcpServers?.["mcp-kv"] ??
+      raw.mcpServers?.mcp_kv ??
+      raw.mcpServers?.mcpkv;
+    const u = s?.url?.trim();
+    if (!u || !s) return;
+    process.env.MCP_KV_HTTP_URL = u;
+    if (s.headers && Object.keys(s.headers).length > 0)
+      gCursorMcpKvHeaders = { ...s.headers };
+    const masked = u.replace(/(user-)[A-Za-z0-9_-]+/i, "$1***");
+    console.error(
+      `[mcp] Endpoint mcp-kv взят из ${jsonPath} → ${masked} (transport: ${/\/sse\//i.test(u) ? "sse" : "http"})`,
+    );
+  } catch {
+    /* noop */
+  }
+}
+
+hydrateMcpKvFromCursorMcpJson();
 
 const EXTRACTED = path.join(ROOT, "prompts", "_extracted");
 const ART = path.join(ROOT, "artifacts");
@@ -144,7 +190,7 @@ function assertInlineMcpForCloud(): void {
   if (!cloudRequiresInlineMcpKv()) return;
   if (envMcpKv()) return;
   throw new Error(
-    `[cloud] CLOUD_REQUIRE_MCP_KV_HTTP=true, но MCP_KV_HTTP_URL пуст.\nЗаполните HTTP endpoint mcp-kv из ЛК https://mcp-kv.ru/ (и Bearer при необходимости).\nПодсказка: скопируйте .env.mcp.example → .env.mcp.local и MCP_KV_DOTENV_PATH=.env.mcp.local\nЛибо снимите требование: CLOUD_REQUIRE_MCP_KV_HTTP=false`,
+    `[cloud] CLOUD_REQUIRE_MCP_KV_HTTP=true, но MCP_KV_HTTP_URL пуст.\nЗаполните URL в .env, либо положите mcp-kv в локальный Cursor файл %USERPROFILE%\\.cursor\\mcp.json (как в IDE), либо снимите требование: CLOUD_REQUIRE_MCP_KV_HTTP=false`,
   );
 }
 
@@ -196,19 +242,27 @@ function attachMcpServers(opts: SdkAgentOptions): void {
   const servers: NonNullable<SdkAgentOptions["mcpServers"]> =
     opts.mcpServers ?? {};
 
-  const kvUrl = envMcpKv()?.replace(/\/$/, "") ?? "";
-
+  const kvUrlRaw = envMcpKv()?.replace(/\/$/, "") ?? "";
   const kvBearer =
     process.env.MCP_KV_HTTP_BEARER?.trim() ||
     process.env.MCP_KV_BEARER?.trim() ||
     process.env.MCP_KV_TOKEN?.trim();
 
-  if (kvUrl) {
-    const headers: Record<string, string> = {};
+  if (kvUrlRaw) {
+    const envType = process.env.MCP_KV_HTTP_TYPE?.trim().toLowerCase();
+    const transport: "http" | "sse" =
+      envType === "sse"
+        ? "sse"
+        : envType === "http"
+          ? "http"
+          : /\/sse\//i.test(kvUrlRaw)
+            ? "sse"
+            : "http";
+    const headers: Record<string, string> = { ...(gCursorMcpKvHeaders ?? {}) };
     if (kvBearer) headers.Authorization = `Bearer ${kvBearer}`;
     servers["mcp_kv"] = {
-      type: "http",
-      url: kvUrl,
+      type: transport,
+      url: kvUrlRaw,
       ...(Object.keys(headers).length ? { headers } : {}),
     };
   }
@@ -216,7 +270,7 @@ function attachMcpServers(opts: SdkAgentOptions): void {
   /** Отдельный WordPress MCP только если URL отличается от единого mcp-kv */
   const wpUrl = process.env.WORDPRESS_MCP_HTTP_URL?.trim();
   const wpBear = process.env.WORDPRESS_MCP_HTTP_BEARER?.trim();
-  if (wpUrl && wpUrl !== kvUrl) {
+  if (wpUrl && wpUrl !== kvUrlRaw) {
     const h: Record<string, string> = {};
     if (wpBear) h.Authorization = `Bearer ${wpBear}`;
     servers["wordpress_inline"] = {
