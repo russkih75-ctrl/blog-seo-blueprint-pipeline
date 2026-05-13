@@ -33,7 +33,7 @@ TYPOGRAPHY & BRANDING:
 СОКРАТИ ЗАГОЛОВОК НА ОБЛОЖКЕ !!!! ( НЕ БЕРИ ВЕСЬ ТЕКСТ )
 - Headline: The theme title "{{40.content}}" 
 - Language: All visible text MUST be in Russian Cyrillic.
-- Footer: Subtle Telegram logo and handle @maya_pro at the very bottom (small, neutral). БЕРИ ИЗ ПРИМЕРОВ КОТОРЫЕ Я ТЕБЕ ДАЛ - КРАСИВЫЙ ЗАГОЛОВОК С ПЛАШКОЙ !
+- Footer: без сторонних логотипов мессенджеров и без упоминаний аккаунтов — только нейтральная типографика при необходимости (маленькая строка-кредиты недопустимы без явного ТЗ заказчика). Оформи заголовок с читаемой плашкой по образцу из эталонов заказчика.
 
 TECHNICAL QUALITY TARGETS:
 - 8k resolution, raw photo quality.

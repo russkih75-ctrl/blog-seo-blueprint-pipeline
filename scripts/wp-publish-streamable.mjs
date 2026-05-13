@@ -17,8 +17,9 @@ const mcpKvDotenvRel = process.env.MCP_KV_DOTENV_PATH?.trim();
 if (mcpKvDotenvRel)
   config({ path: path.resolve(ROOT, mcpKvDotenvRel), override: true });
 
+/** Дефолтный баннер для скрипта публикации (нейтральный сток) */
 const DEFAULT_BANNER =
-  "https://mayai.ru/wp-content/uploads/2025/04/2025-04-14_08-52-43.jpg";
+  "https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?w=1600&q=80";
 
 const reqTimeoutMs = Number(process.env.MCP_REQUEST_TIMEOUT_MS ?? "600000");
 
@@ -259,6 +260,8 @@ async function main() {
 
   state.wordpressPublishRaw = rawText.slice(0, 120_000);
   state.wordpressPublishedUrl = wordpressPublishedUrl;
+  if (wordpressPostIdGuess != null)
+    state.wordpressPostId = wordpressPostIdGuess;
 
   mkdirSync(ART, { recursive: true });
   writeFileSync(statePath, JSON.stringify(state, null, 2), "utf-8");

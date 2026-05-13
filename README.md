@@ -88,7 +88,7 @@ docker run --rm --env-file .env -v /path/to/repo:/repo -e WORKSPACE_ROOT=/repo b
 
 ```bash
 npm run content:check
-npm run content:run -- --niche "Ваша ниша" --keywords "ключ1, ключ2" --reference "https://mayai.ru/..." --dry-run
+npm run content:run -- --niche "Ваша ниша" --keywords "ключ1, ключ2" --reference "https://example.com/..." --dry-run
 ```
 
 Публикация включается только явно: **`--publish`** или **`CONTENT_PUBLISH_MODE=publish`** в `.env`.
@@ -110,7 +110,7 @@ npm run scenario:publish-complete
 ```text
 Ниша: автоматизация бизнес-процессов на производстве.
 Ключи: умное производство 2026, MES внедрение.
-Референс статьи (только структура/стиль): https://mayai.ru/.../...
+Референс статьи (только структура/стиль): https://example.com/.../...
 Референс лица для обложки и баннера (отдельно): https://мой-сайт.ru/face-reference.jpg
 Публикация: черновик в WP.
 ```
@@ -119,7 +119,7 @@ CLI-эквивалент:
 
 ```bash
 npm run content:run -- --niche "..." --keywords "..." \
-  --reference "https://mayai.ru/..." \
+  --reference "https://example.com/..." \
   --visual-reference "https://example.com/face.jpg" \
   --dry-run
 ```
