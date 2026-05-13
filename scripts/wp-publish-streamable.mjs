@@ -142,6 +142,26 @@ async function main() {
     process.exit(1);
   }
 
+  const forcePublish = process.env.WP_PUBLISH_FORCE === "true";
+  const existingUrl = state.wordpressPublishedUrl?.trim();
+  if (!forcePublish && existingUrl?.startsWith("http")) {
+    console.log(
+      JSON.stringify(
+        {
+          ok: true,
+          skipped: true,
+          reason: "already_published",
+          wordpressPublishedUrl: existingUrl,
+          wordpressPostId: state.wordpressPostId ?? null,
+          hint: "Задайте WP_PUBLISH_FORCE=true, чтобы создать ещё один пост.",
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+
   const publishStatus =
     (process.env.WP_POST_STATUS || "publish").trim() || "publish";
   const postType = (process.env.WP_POST_TYPE || "posts").trim() || "posts";

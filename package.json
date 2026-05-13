@@ -18,6 +18,8 @@
     "content:run": "node dist/content-factory/run-content-factory.js",
     "content:check": "node dist/content-factory/run-content-factory.js --check-only",
     "content:indexnow": "node dist/content-factory/run-content-factory.js --indexnow-only",
+    "content:finalize-publish": "node scripts/content-publish-finalize.mjs",
+    "scenario:publish-complete": "npm run build && npm run content:check && npm run wp:publish-streamable && npm run content:finalize-publish",
     "wp:publish-pipeline": "node --import tsx src/wp-publish-from-pipeline.ts",
     "wp:publish-mcp-state": "node --import tsx src/wp-publish-from-state-mcp.ts",
     "wp:publish-streamable": "node scripts/wp-publish-streamable.mjs",
