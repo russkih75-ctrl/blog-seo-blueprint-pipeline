@@ -3,19 +3,34 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "extract": "node scripts/extract-blueprint-prompts.mjs",
     "check:crsr-repos": "node scripts/cloud-setup-check.mjs",
     "check:cloud-setup": "node scripts/cloud-setup-check.mjs",
     "workflow:cloud": "node --import tsx src/run-workflow-cloud.ts",
     "workflow:run": "node scripts/run-workflow.mjs",
-    "build": "tsc"
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "bot": "node dist/telegram-bot.js",
+    "content:run": "node dist/content-factory/run-content-factory.js",
+    "content:check": "node dist/content-factory/run-content-factory.js --check-only",
+    "content:indexnow": "node dist/content-factory/run-content-factory.js --indexnow-only",
+    "wp:publish-pipeline": "node --import tsx src/wp-publish-from-pipeline.ts",
+    "wp:publish-mcp-state": "node --import tsx src/wp-publish-from-state-mcp.ts",
+    "wp:publish-streamable": "node scripts/wp-publish-streamable.mjs",
+    "mcp:tools-check": "node scripts/mcp-sse-tools-check.mjs"
   },
   "dependencies": {
     "@cursor/sdk": "^1.0.12",
-    "dotenv": "^16.6.1"
+    "@upstash/context7-mcp": "^2.2.5",
+    "dotenv": "^16.6.1",
+    "grammy": "^1.42.0"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
     "@types/node": "^22.17.7",
     "tsx": "^4.20.3",
     "typescript": "^5.9.2"
