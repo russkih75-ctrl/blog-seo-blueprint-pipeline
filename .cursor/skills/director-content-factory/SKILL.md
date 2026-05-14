@@ -29,6 +29,8 @@ description: Оркестратор SEO/GEO контент-фабрики — ru
 - **`styleReferencePolicy`**: из `config/default-article-style.json` → `referenceUsage` (напр. `structure_style_length_only`).
 - Поле **`references`** в intake дублирует `articleReferenceUrls` для совместимости.
 
+Оркестрация стадий — `config/agent-orchestration.json`. Для публикации на **wordprais.ru** дополнительно применяй навык **`wordpress-articles`** и **`prompts/wordpress-articles/MASTER_PROMPT.md`** (фазы A–J).
+
 ## Handoff
 
 Файл `handoff.json` должен содержать:

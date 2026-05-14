@@ -2,6 +2,8 @@
 
 Автоматизация по blueprint **«RU SEO/GEO СТАТЬИ ДЛЯ БЛОГА 2026»**: промпты из вашего `.json`, шаги **Wordstat**, **Nano Banana (Kie)** и **WordPress** через MCP **mcp-kv**.
 
+Режим публикации статей для **https://wordprais.ru/** (**«Вордпресс статьи»**): пошаговый регламент для агента — **`prompts/wordpress-articles/MASTER_PROMPT.md`**; HTML-блоки и FAQ — **`prompts/wordpress-articles/HTML_STRUCTURE_WORDPRAIS.md`**; цель и Allowlist ссылок — **`config/wordpress-articles.json`**. Статьи с разметкой «как на mayai» берут с этих страниц **только каркас секций**, без копирования чужого текста и промо.
+
 **Cursor Cloud через `@cursor/sdk`** чаще всего требует: (1) GitHub‑репозиторий добавленный к вашему Cursor в Dashboard, (2) **HTTP MCP** — URL и Bearer из [личного кабинета mcp-kv.ru](https://mcp-kv.ru/) в переменных `MCP_KV_HTTP_URL` / `MCP_KV_HTTP_BEARER` (удобнее вынести в `.env.mcp.local`, см. `.env.mcp.example` и **`MCP_KV_DOTENV_PATH`**). Так инструменты попадают в облачный агент вместе со скриптом.
 
 ## План работ и соответствие модулям Make
@@ -99,7 +101,21 @@ npm run content:run -- --niche "Ваша ниша" --keywords "ключ1, клю
 npm run scenario:publish-complete
 ```
 
+То же под именем целевого сценария **«Вордпресс статьи»**:
+
+```bash
+npm run scenario:wordpress-articles
+```
+
 Скрипт собирает проект, проверяет конфиги, вызывает **`wp:publish-streamable`** (если URL уже есть — пропуск без дубликата, см. **`WP_PUBLISH_FORCE=true`** для нового поста), затем **`content:finalize-publish`**: обновляет **`publish-result.json`**, **`indexnow-result.json`**, **`qa-report.json`** в каталоге последнего запуска из **`content-index.json`** (или **`CONTENT_RUN_ID`**).
+
+После того как в **`artifacts/pipeline-state.json`** уже есть текст и выполнен первичный **`wp:publish-streamable`**, можно прогнать **Nano 16:9 (обложка) + 21:9 (баннер)** и загрузку в медиатеку без повторного сидирования темы:
+
+```bash
+MCP_REQUEST_TIMEOUT_MS=900000 npm run scenario:wordpress-articles-with-nano
+```
+
+(цепочка: **`wp:publish-streamable`** → **`wp:nano-images-republish`** → **`content:finalize-publish`**). Отдельные команды: **`npm run wp:nano-images-republish`**, **`npm run content:finalize-publish`**.
 
 Готовая нейтральная статья про Elementor (**`seed:elementor`**) и полная публикация с **генерацией обложки и баннера через MCP** (`nano_banana_pro` / `nano_banana_2`), загрузкой в медиатеку (**`wordpress_upload_media`**) и обновлением поста:
 
@@ -132,7 +148,7 @@ npm run content:run -- --niche "..." --keywords "..." \
   --dry-run
 ```
 
-Если в тексте есть слова вроде «статья», «ключи», «опубликовать», «SEO», «GEO», бот добавит блок про **director-content-factory**; упоминание mayai добавляет уточнение про два типа референсов.
+Если в тексте есть слова вроде «статья», «ключи», «опубликовать», «SEO», «GEO», бот добавит блок про **director-content-factory**; упоминание mayai добавляет уточнение про два типа референсов; **wordprais.ru** / «вордпресс статьи» — блок **`wordpress-articles`** и ссылку на **`MASTER_PROMPT.md`**.
 
 ### Антидубль
 

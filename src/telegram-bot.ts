@@ -414,6 +414,20 @@ function appendMayaiStructureReferenceClarity(userMessage: string): string {
   ].join("\n");
 }
 
+function appendWordpressArticlesHint(userMessage: string): string {
+  const triggers =
+    /вордпресс\s*стат|wordpress\s*articles|wordprais\.ru|wordprais|вордпрейс/u;
+  if (!triggers.test(userMessage)) return "";
+  return [
+    "## Автоматизация «Вордпресс статьи» (целевой сайт wordprais.ru)",
+    "- Полный пошаговый регламент без пропусков: **`prompts/wordpress-articles/MASTER_PROMPT.md`**.",
+    "- Разметка HTML (лид, врезки, таблица, баннер 21:9 в теле, FAQ, ресурсы): **`prompts/wordpress-articles/HTML_STRUCTURE_WORDPRAIS.md`**.",
+    "- Конфиг цели и Allowlist ссылок: **`config/wordpress-articles.json`**; навык агента: **`wordpress-articles`**.",
+    "- Изображения через MCP **mcp-kv.ru**: **`nano_banana_pro`** — обложка **16:9**, баннер **21:9**; затем **`wordpress_upload_media`** и постоянный URL на домене сайта (см. **`npm run wp:nano-images-republish`**, **`MCP_REQUEST_TIMEOUT_MS`**).",
+    "",
+  ].join("\n");
+}
+
 function appendContentFactoryHint(userMessage: string): string {
   const triggers =
     /ниш|ключ|стать|опублик|референс|seo|гео|geo|контент.?фабрик|indexnow|метла|wordpress|WP\b|блог/u;
@@ -534,7 +548,7 @@ async function runAgentTurn(
     ? `# Persona (session sync)\n${personaRaw}\n\n---\n\n`
     : "";
   const schedHint = options?.scheduled ? appendScheduledPublishHint() : "";
-  const payload = `${prefix}${schedHint}${appendContentFactoryHint(userPlainText)}${appendMayaiStructureReferenceClarity(userPlainText)}${personaBlock}${userPlainText}`;
+  const payload = `${prefix}${schedHint}${appendContentFactoryHint(userPlainText)}${appendWordpressArticlesHint(userPlainText)}${appendMayaiStructureReferenceClarity(userPlainText)}${personaBlock}${userPlainText}`;
 
   const agent = await getOrCreateAgent(
     chatId,
