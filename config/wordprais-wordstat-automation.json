@@ -1,0 +1,214 @@
+{
+  "version": 1,
+  "targetSite": "https://wordprais.ru/",
+  "meta": {
+    "regionCode": 225,
+    "regionLabel": "Россия",
+    "snapshotDate": "2026-05-14",
+    "source": "wordstat_mcp_kv",
+    "device": "all",
+    "notes": "Ключи без брендовых мусорных формулировок (fortuna, novelit и т.п.) — см. excludedBrandedQueries."
+  },
+  "excludedBrandedQueries": [
+    "seo продвижение сайтов seo fortuna",
+    "seo продвижение сайтов novelit"
+  ],
+  "clusters": [
+    {
+      "id": "c_wp_commercial",
+      "titleRu": "WordPress: коммерция",
+      "priority": 0,
+      "draftLandingUrl": "/uslugi/wordpress-razrabotka/"
+    },
+    {
+      "id": "c_plugins_themes",
+      "titleRu": "Плагины, темы, модули",
+      "priority": 1,
+      "draftLandingUrl": "/uslugi/wordpress-plaginy-temy/"
+    },
+    {
+      "id": "c_calculators",
+      "titleRu": "Калькуляторы для сайта",
+      "priority": 0,
+      "draftLandingUrl": "/uslugi/kalkulyatory-dlya-sajta/"
+    },
+    {
+      "id": "c_seo_wp",
+      "titleRu": "SEO и продвижение",
+      "priority": 0,
+      "draftLandingUrl": "/prodvizhenie/seo/"
+    },
+    {
+      "id": "c_support",
+      "titleRu": "Поддержка WordPress",
+      "priority": 2,
+      "draftLandingUrl": "/uslugi/teh-podderzhka-wordpress/"
+    },
+    {
+      "id": "c_content",
+      "titleRu": "Контент для сайта",
+      "priority": 1,
+      "draftLandingUrl": "/uslugi/kontent-dlya-sajta/"
+    },
+    {
+      "id": "c_geo_ai",
+      "titleRu": "GEO и ИИ в поиске",
+      "priority": 1,
+      "draftLandingUrl": "/yandex/"
+    }
+  ],
+  "seeds": [
+    {
+      "id": "ws_01",
+      "phrase": "разработка сайта на wordpress",
+      "wordstatStatus": "ok",
+      "clusterId": "c_wp_commercial",
+      "queries": [{ "phrase": "разработка сайта на wordpress", "shows": 122 }]
+    },
+    {
+      "id": "ws_02",
+      "phrase": "wordpress разработка",
+      "wordstatStatus": "ok",
+      "clusterId": "c_wp_commercial",
+      "queries": [
+        { "phrase": "разработка wordpress", "shows": 246 },
+        { "phrase": "разработка сайта на wordpress", "shows": 122 },
+        { "phrase": "wordpress плагины разработка", "shows": 27 },
+        { "phrase": "wordpress разработка темы", "shows": 20 },
+        { "phrase": "разработка сайтов wordpress cms", "shows": 17 }
+      ]
+    },
+    {
+      "id": "ws_03",
+      "phrase": "заказать сайт wordpress",
+      "wordstatStatus": "ok",
+      "clusterId": "c_wp_commercial",
+      "queries": [{ "phrase": "заказать сайт на wordpress", "shows": 59 }]
+    },
+    {
+      "id": "ws_04",
+      "phrase": "тема wordpress на заказ",
+      "wordstatStatus": "no_data",
+      "clusterId": "c_plugins_themes",
+      "queries": []
+    },
+    {
+      "id": "ws_05",
+      "phrase": "seo продвижение сайта",
+      "wordstatStatus": "ok",
+      "clusterId": "c_seo_wp",
+      "queries": [
+        { "phrase": "seo продвижение сайта", "shows": 8608 },
+        { "phrase": "seo продвижение сайта москва", "shows": 889 },
+        { "phrase": "seo оптимизация продвижение сайтов", "shows": 656 },
+        { "phrase": "seo продвижение сайта заказать", "shows": 652 },
+        { "phrase": "поисковое продвижение сайтов seo", "shows": 621 },
+        { "phrase": "seo продвижение сайтов цена", "shows": 480 },
+        { "phrase": "seo продвижение сайта услуги", "shows": 231 },
+        { "phrase": "seo продвижение сайта россия", "shows": 230 },
+        { "phrase": "seo продвижение сайта в яндекс", "shows": 228 }
+      ]
+    },
+    {
+      "id": "ws_06",
+      "phrase": "калькулятор для сайта заказать",
+      "wordstatStatus": "no_data",
+      "clusterId": "c_calculators",
+      "queries": []
+    },
+    {
+      "id": "ws_07",
+      "phrase": "модуль для wordpress",
+      "wordstatStatus": "ok",
+      "clusterId": "c_plugins_themes",
+      "queries": [{ "phrase": "модуль для wordpress", "shows": 72 }]
+    },
+    {
+      "id": "ws_08",
+      "phrase": "калькулятор для сайта",
+      "wordstatStatus": "ok",
+      "clusterId": "c_calculators",
+      "queries": [
+        { "phrase": "калькулятор для сайта", "shows": 1939 },
+        { "phrase": "онлайн калькулятор для сайта", "shows": 622 },
+        { "phrase": "калькулятор для расчета сайта", "shows": 552 },
+        { "phrase": "калькулятор стоимости для сайта", "shows": 529 },
+        { "phrase": "разработка калькулятора для сайта", "shows": 52 },
+        { "phrase": "создать калькулятор для сайта", "shows": 45 },
+        { "phrase": "конструктор калькуляторов для сайта", "shows": 25 },
+        { "phrase": "создание калькуляторов для сайта", "shows": 23 }
+      ]
+    },
+    {
+      "id": "ws_09",
+      "phrase": "техническая поддержка wordpress",
+      "wordstatStatus": "ok",
+      "clusterId": "c_support",
+      "queries": [{ "phrase": "техническая поддержка сайта wordpress", "shows": 9 }]
+    },
+    {
+      "id": "ws_10",
+      "phrase": "нейросети и продвижение сайта",
+      "wordstatStatus": "no_data",
+      "clusterId": "c_geo_ai",
+      "queries": []
+    },
+    {
+      "id": "ws_11",
+      "phrase": "ai seo продвижение",
+      "wordstatStatus": "no_data",
+      "clusterId": "c_geo_ai",
+      "queries": []
+    },
+    {
+      "id": "ws_12",
+      "phrase": "кастомная тема wordpress",
+      "wordstatStatus": "no_data",
+      "clusterId": "c_plugins_themes",
+      "queries": []
+    },
+    {
+      "id": "ws_13",
+      "phrase": "оптимизация сайта под нейросеть",
+      "wordstatStatus": "ok",
+      "clusterId": "c_geo_ai",
+      "queries": [{ "phrase": "оптимизация сайта под нейросети", "shows": 31 }]
+    },
+    {
+      "id": "ws_14",
+      "phrase": "статья для сайта заказать",
+      "wordstatStatus": "ok",
+      "clusterId": "c_content",
+      "queries": [{ "phrase": "заказать статью для сайта", "shows": 23 }]
+    },
+    {
+      "id": "ws_15",
+      "phrase": "создание сайта wordpress",
+      "wordstatStatus": "ok",
+      "clusterId": "c_wp_commercial",
+      "queries": [
+        { "phrase": "создание сайта на wordpress", "shows": 493 },
+        { "phrase": "создание сайтов wordpress с нуля", "shows": 78 },
+        { "phrase": "wordpress создание сайта с elementor", "shows": 77 },
+        { "phrase": "создание сайтов на основе wordpress", "shows": 41 },
+        { "phrase": "wordpress создание сайта бесплатно", "shows": 37 },
+        { "phrase": "нейросеть для создания сайта на wordpress", "shows": 14 },
+        { "phrase": "создание и продвижение сайтов на wordpress", "shows": 5 },
+        { "phrase": "создание сайтов на wordpress цена", "shows": 6 }
+      ]
+    },
+    {
+      "id": "ws_16",
+      "phrase": "__semantic_refill__",
+      "wordstatStatus": "meta",
+      "clusterId": "c_wp_commercial",
+      "queries": [],
+      "notes": "Зарезервировано: сигнал завершения цикла — запуск субагента семантики (ЯДрышко) и обновление очереди."
+    }
+  ],
+  "semanticRefill": {
+    "repositoryUrl": "https://github.com/Horosheff/yadryshko-semantic-core-subagent",
+    "targetVendorPath": "vendor/yadryshko-semantic-core-subagent",
+    "flagRelativePath": "artifacts/wordstat-queue-need-refill.flag"
+  }
+}

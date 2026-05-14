@@ -94,8 +94,9 @@
 
 ## Фаза H — Антидубль и медиа
 
-1. Прогони **`duplicate-guardian`**: при блокировке измени slug/углы темы.
-2. Опционально **`metla-media-cleaner`** если включена политика.
+1. Отдельный проход skill **`duplicate-title-meta-guardian`**: убедись, что **seoTitle**, **meta description** и **slug** уникальны против `artifacts/content-index.json` и (если доступно MCP) последних постов через **`wordpress_search_posts`**. При малейшем дубле или near-duplicate — перепиши title/meta/slug до одобрения.
+2. Прогони **`duplicate-guardian`** по телу статьи и составному индексу: при блокировке измени slug/углы темы.
+3. Опционально **`metla-media-cleaner`** если включена политика.
 
 ---
 

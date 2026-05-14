@@ -9,7 +9,7 @@
 **E** MCP: `nano_banana_*` обложка **16:9**, баннер **21:9** → **`wordpress_upload_media`** → постоянные URL на домене → `featured_media`. Скрипт: `npm run wp:nano-images-republish`.  
 **F** Текст по **`HTML_STRUCTURE_WORDPRAIS.md`** + humanizer + запреты из промпта **012**.  
 **G** Чеклист HTML (нет `<h1>`, таблица с **видимыми границами** по шаблону в `HTML_STRUCTURE_WORDPRAIS.md`, figure-баннер, FAQ, ресурсы только с allowlist).  
-**H** duplicate-guardian; опционально Метла.  
+**H** duplicate-title-meta-guardian (title/meta/slug vs индекс + MCP поиск) → затем duplicate-guardian по тексту; опционально Метла.  
 **I** `wordpress_create_post` / `update`; state в `artifacts/pipeline-state.json`; задайте **`CONTENT_RUN_ID`** или **`contentRunId`** в state для финализации.  
 **J** `npm run content:finalize-publish` (+ IndexNow при ключе).
 

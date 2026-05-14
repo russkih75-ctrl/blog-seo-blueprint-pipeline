@@ -107,6 +107,12 @@ npm run scenario:publish-complete
 npm run scenario:wordpress-articles
 ```
 
+**Очередь Wordstat для «Вордпресс статьи»** (семена **ws_01…ws_16**, регион **225**, снимок **2026-05-14**, источник **wordstat_mcp_kv**): конфиг **`config/wordprais-wordstat-automation.json`**. Скрипт **`npm run wp:wordstat-queue-next`** выводит JSON с полем **`taskRu`** — готовое текстовое ТЗ для Cursor-агента и сохраняет курсор в **`artifacts/wordstat-queue-cursor.json`** (каталог `artifacts/` в `.gitignore`). Если все запросы уже задействованы или конфликтуют с **`artifacts/content-index.json`**, создаётся **`artifacts/wordstat-queue-need-refill.flag`** и **`taskRu`** описывает пополнение ядра через субагента **[ЯДрышко](https://github.com/Horosheff/yadryshko-semantic-core-subagent)** (`npm run install:yadryshko-subagent` кладёт репозиторий в **`vendor/`**, не коммитится при записи в `.gitignore`). Антидубль **title / meta / slug** — отдельный skill **`duplicate-title-meta-guardian`**.
+
+В Telegram: **`/schedule_queue_every 3h`** — каждые 3 часа новая тема из этой очереди (бот подставляет **`taskRu`** автоматически). Обычное **`/schedule_every`** повторяет один и тот же сохранённый текст и сбрасывает режим очереди.
+
+Опционально: **`WORDSTAT_AUTOMATION_CONFIG`** — путь к своей копии JSON-конфига очереди.
+
 Уточнение по **`content:finalize-publish`**: run берётся из **`CONTENT_RUN_ID`**, затем из **`pipeline-state.json` → `contentRunId`** (проставляется **`seed:elementor`** / **`wp:publish-streamable`** при заданном **`CONTENT_RUN_ID`**), иначе — **самая новая** запись в **`content-index.json`** по полю **`createdAt`** (раньше ошибочно бралась самая старая).
 
 Скрипт собирает проект, проверяет конфиги, вызывает **`wp:publish-streamable`** (если URL уже есть — пропуск без дубликата, см. **`WP_PUBLISH_FORCE=true`** для нового поста), затем **`content:finalize-publish`**: обновляет **`publish-result.json`**, **`indexnow-result.json`**, **`qa-report.json`** в каталоге запуска (см. выбор **runId** выше).

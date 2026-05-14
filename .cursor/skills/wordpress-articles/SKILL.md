@@ -27,6 +27,12 @@ description: Автоматизация «Вордпресс статьи» дл
 - В **`handoff.json`** укажи целевой сайт и запрет внешних промо-ссылок с чужих статей-образцов.
 - Статья-образец (mayai и т.д.) — **structure-only** (см. `structureReference` в JSON).
 
+## Очередь Wordstat и антидубль
+
+- Плановые темы из снимка Wordstat: **`config/wordprais-wordstat-automation.json`**, скрипт **`npm run wp:wordstat-queue-next`** → поле **`taskRu`** для агента; в Telegram — **`/schedule_queue_every 3h`**.
+- Перед публикацией отдельно выполни skill **`duplicate-title-meta-guardian`** (уникальность **seoTitle**, **meta description**, **slug** против индекса и при необходимости MCP **`wordpress_search_posts`**), затем **`duplicate-guardian`** по телу статьи.
+- Исчерпание очереди → маркер **`artifacts/wordstat-queue-need-refill.flag`** и субагент **[ЯДрышко](https://github.com/Horosheff/yadryshko-semantic-core-subagent)** (`npm run install:yadryshko-subagent`).
+
 ## MCP
 
 - Генерация: **`nano_banana_pro`** / **`nano_banana_2`** (`aspect_ratio` **16:9** и **21:9**).

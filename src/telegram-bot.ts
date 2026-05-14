@@ -12,6 +12,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { config as loadEnv } from "dotenv";
 import { Bot, type Api, type Context } from "grammy";
 import {
@@ -108,6 +109,9 @@ const WORKSPACE_ROOT = path.resolve(
 
 const SESSIONS_PATH = path.join(WORKSPACE_ROOT, ".telegram-agent-sessions.json");
 const SCHEDULES_PATH = path.join(WORKSPACE_ROOT, ".telegram-schedules.json");
+
+/** Маркер в lastTaskText: подставить актуальное ТЗ из очереди Wordstat. */
+const WORDSTAT_QUEUE_SENTINEL = "__WP_WORDSTAT_QUEUE_V1__";
 
 const TELEGRAM_HTML_MAX = 4096;
 
@@ -726,16 +730,51 @@ function isAllowedChat(chatId: number | undefined): boolean {
   return allowed.has(String(chatId));
 }
 
+function resolveWordstatQueueTask(): string {
+  const script = path.join(WORKSPACE_ROOT, "scripts", "wp-wordstat-queue-next.mjs");
+  try {
+    const r = spawnSync(process.execPath, [script], {
+      cwd: WORKSPACE_ROOT,
+      encoding: "utf-8",
+      env: process.env,
+      timeout: 120_000,
+    });
+    if (r.status !== 0) {
+      console.error("[telegram-bot] wordstat queue exit", r.status, r.stderr?.slice(0, 500));
+      return (
+        `Не удалось получить тему из очереди Wordstat (скрипт завершился с кодом ${r.status}). Выполните в каталоге проекта: npm run wp:wordstat-queue-next и передайте поле taskRu ассистенту.\n\n` +
+        `Нужна автоматизация «Вордпресс статьи» для wordprais.ru по MASTER_PROMPT.`
+      );
+    }
+    const raw = (r.stdout ?? "").trim();
+    const j = JSON.parse(raw) as { taskRu?: string };
+    if (!j.taskRu?.trim()) throw new Error("empty taskRu");
+    return j.taskRu.trim();
+  } catch (e) {
+    console.error("[telegram-bot] resolveWordstatQueueTask", e);
+    return (
+      `Ошибка очереди Wordstat. Запустите: npm run wp:wordstat-queue-next и передайте значение taskRu ассистенту.\n\n` +
+      `Дальше — полный цикл «Вордпресс статьи» (nano-изображения, публикация WordPress).`
+    );
+  }
+}
+
 function scheduleSummaryLine(s: ChatScheduleRecord): string {
   if (!s.enabled) return "Расписание выключено.";
   const when = new Date(s.nextRunAt).toLocaleString("ru-RU", {
     dateStyle: "short",
     timeStyle: "short",
   });
+  const queueHint = s.wordstatQueue
+    ? "Режим очереди Wordstat («Вордпресс статьи»): перед каждым запуском тема берётся из config/wordprais-wordstat-automation.json."
+    : "";
   const tmpl = s.lastTaskText?.trim()
-    ? "Шаблон задачи сохранён."
+    ? s.wordstatQueue && s.lastTaskText.trim() === WORDSTAT_QUEUE_SENTINEL
+      ? "Шаблон: автоматическая очередь ключей Wordstat."
+      : "Шаблон задачи сохранён."
     : "Шаблон задачи ещё не задан — отправьте текст с ключами или нишей.";
-  return `Интервал: каждые ${formatIntervalRu(s.intervalMs)}. Следующий запуск: ${when}. ${tmpl}`;
+  const q = queueHint ? `\n${queueHint}` : "";
+  return `Интервал: каждые ${formatIntervalRu(s.intervalMs)}. Следующий запуск: ${when}. ${tmpl}${q}`;
 }
 
 async function main(): Promise<void> {
@@ -773,7 +812,8 @@ async function main(): Promise<void> {
       "• Публикация в блог — по умолчанию безопасный пробный режим; выход в прод только когда на сервере настроены переменные для публикации (см. README проекта).\n\n" +
       "Расписание\n" +
       "• /schedule — что включено и когда следующий запуск.\n" +
-      "• /schedule_every 3h или 30m или 1d — повторять задачу с таким шагом.\n" +
+      "• /schedule_every 3h или 30m или 1d — повторять сохранённый текст задачи с таким шагом.\n" +
+      "• /schedule_queue_every 3h — каждый запуск **новая тема** из очереди Wordstat для автоматизации «Вордпресс статьи» (конфиг wordprais-wordstat-automation.json).\n" +
       "• Можно в одном сообщении совместить задачу и фразу вроде «публикация раз в 3 часа».\n" +
       "• /schedule_off — отключить автозапуски в этом чате.\n\n" +
       "Сессия\n" +
@@ -808,7 +848,7 @@ async function main(): Promise<void> {
     const s = all[id];
     if (!s) {
       await ctx.reply(
-        "Расписание пока не настроено.\n\nПримеры:\n• /schedule_every 3h\n• или в сообщении с задачей: «…публикация раз в 3 часа»",
+        "Расписание пока не настроено.\n\nПримеры:\n• /schedule_every 3h\n• /schedule_queue_every 3h\n• или в сообщении с задачей: «…публикация раз в 3 часа»",
       );
       return;
     }
@@ -830,7 +870,46 @@ async function main(): Promise<void> {
     s.enabled = false;
     all[id] = s;
     await writeSchedules(all);
-    await ctx.reply("Автозапуски в этом чате выключены. Шаблон задачи сохранён — можно снова включить через /schedule_every.");
+    await ctx.reply("Автозапуски в этом чате выключены. Шаблон задачи сохранён — можно снова включить через /schedule_every или /schedule_queue_every.");
+  });
+
+  bot.command("schedule_queue_every", async (ctx) => {
+    if (!isAllowedChat(ctx.chat?.id)) {
+      await ctx.reply("Здесь бот недоступен.");
+      return;
+    }
+    const text = ctx.message?.text?.trim() ?? "";
+    const parts = text.split(/\s+/).slice(1);
+    const arg = parts.join(" ").trim();
+    if (!arg) {
+      await ctx.reply(
+        "Укажите интервал, например: /schedule_queue_every 3h — каждые 3 часа новая статья из очереди Wordstat для wordprais.ru.",
+      );
+      return;
+    }
+    const msRaw = parseScheduleEveryArg(arg);
+    if (msRaw === null) {
+      await ctx.reply("Не разобрал интервал. Примеры: 30m, 3h, 1d.");
+      return;
+    }
+    const intervalMs = clampIntervalMs(msRaw);
+    const id = String(ctx.chat!.id);
+    const all = await readSchedules();
+    const prev = all[id];
+    const now = Date.now();
+    const nextRunAt = now + intervalMs;
+    all[id] = {
+      enabled: true,
+      intervalMs,
+      nextRunAt,
+      lastRunAt: prev?.lastRunAt,
+      lastTaskText: WORDSTAT_QUEUE_SENTINEL,
+      wordstatQueue: true,
+    };
+    await writeSchedules(all);
+    await ctx.reply(
+      `Очередь Wordstat: каждые ${formatIntervalRu(intervalMs)} будет новая тема из config/wordprais-wordstat-automation.json (скрипт wp:wordstat-queue-next). Следующий запуск около ${new Date(nextRunAt).toLocaleString("ru-RU")}.`,
+    );
   });
 
   bot.command("schedule_every", async (ctx) => {
@@ -871,10 +950,11 @@ async function main(): Promise<void> {
       nextRunAt,
       lastRunAt: prev?.lastRunAt,
       lastTaskText: prev?.lastTaskText,
+      wordstatQueue: false,
     };
     await writeSchedules(all);
     await ctx.reply(
-      `Запомнила: повтор каждые ${formatIntervalRu(intervalMs)}. Следующий запуск около ${new Date(nextRunAt).toLocaleString("ru-RU")}.\nЕсли шаблон задачи ещё не отправляли — напишите сообщение с ключами или нишей (можно вместе с расписанием в одном тексте).`,
+      `Запомнила: повтор каждые ${formatIntervalRu(intervalMs)}. Следующий запуск около ${new Date(nextRunAt).toLocaleString("ru-RU")}.\nЕсли шаблон задачи ещё не отправляли — напишите сообщение с ключами или нишей (можно вместе с расписанием в одном тексте). Для очереди ключей Wordstat используйте /schedule_queue_every с тем же интервалом.`,
     );
   });
 
@@ -911,6 +991,9 @@ async function main(): Promise<void> {
               nextRunAt: Date.now() + scheduleMs,
               lastRunAt: prev?.lastRunAt,
               lastTaskText: template,
+              wordstatQueue:
+                prev?.wordstatQueue === true &&
+                template === WORDSTAT_QUEUE_SENTINEL,
             };
             await writeSchedules(all);
             await ctx.reply(
@@ -929,6 +1012,7 @@ async function main(): Promise<void> {
           nextRunAt: Date.now() + scheduleMs,
           lastRunAt: prev?.lastRunAt,
           lastTaskText: taskText,
+          wordstatQueue: false,
         };
         await writeSchedules(all);
       }
@@ -997,10 +1081,14 @@ async function main(): Promise<void> {
             busyChats.delete(chatIdStr);
             continue;
           }
+          let userPlainText = sch.lastTaskText!.trim();
+          if (sch.wordstatQueue === true && userPlainText === WORDSTAT_QUEUE_SENTINEL) {
+            userPlainText = resolveWordstatQueueTask();
+          }
           await executeAgentJob({
             chatIdStr,
             chatIdNum,
-            userPlainText: sch.lastTaskText!.trim(),
+            userPlainText,
             api: bot.api,
             apiKey,
             modelId,
