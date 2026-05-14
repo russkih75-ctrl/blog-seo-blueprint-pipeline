@@ -27,6 +27,8 @@ const seoTitle =
 const metaDescription =
   "Разбираем Elementor как конструктор страниц для WordPress: бесплатная база и платное расширение Pro, сетка, типичные ошибки, производительность. С иллюстрацией-баннером в тексте.";
 
+const runIdEnv = process.env.CONTENT_RUN_ID?.trim() ?? null;
+
 const state = {
   topic:
     "Elementor — визуальный конструктор страниц и записей для WordPress: сетка, виджеты, темизация",
@@ -38,6 +40,7 @@ const state = {
   coverNanoPublicUrl: COVER_URL,
   bannerNanoPublicUrl: MID_BANNER_URL,
   midArticleBannerSrcUrl: MID_BANNER_URL,
+  contentRunId: runIdEnv,
   imagePack: {
     filename: "elementor_cover",
     title: seoTitle.slice(0, 120),

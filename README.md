@@ -107,7 +107,9 @@ npm run scenario:publish-complete
 npm run scenario:wordpress-articles
 ```
 
-Скрипт собирает проект, проверяет конфиги, вызывает **`wp:publish-streamable`** (если URL уже есть — пропуск без дубликата, см. **`WP_PUBLISH_FORCE=true`** для нового поста), затем **`content:finalize-publish`**: обновляет **`publish-result.json`**, **`indexnow-result.json`**, **`qa-report.json`** в каталоге последнего запуска из **`content-index.json`** (или **`CONTENT_RUN_ID`**).
+Уточнение по **`content:finalize-publish`**: run берётся из **`CONTENT_RUN_ID`**, затем из **`pipeline-state.json` → `contentRunId`** (проставляется **`seed:elementor`** / **`wp:publish-streamable`** при заданном **`CONTENT_RUN_ID`**), иначе — **самая новая** запись в **`content-index.json`** по полю **`createdAt`** (раньше ошибочно бралась самая старая).
+
+Скрипт собирает проект, проверяет конфиги, вызывает **`wp:publish-streamable`** (если URL уже есть — пропуск без дубликата, см. **`WP_PUBLISH_FORCE=true`** для нового поста), затем **`content:finalize-publish`**: обновляет **`publish-result.json`**, **`indexnow-result.json`**, **`qa-report.json`** в каталоге запуска (см. выбор **runId** выше).
 
 После того как в **`artifacts/pipeline-state.json`** уже есть текст и выполнен первичный **`wp:publish-streamable`**, можно прогнать **Nano 16:9 (обложка) + 21:9 (баннер)** и загрузку в медиатеку без повторного сидирования темы:
 

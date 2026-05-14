@@ -92,6 +92,7 @@ function parseMediaId(fullText, parsedJson) {
     if (typeof id === "string" && /^\d+$/.test(id)) return Number(id);
   }
   const m =
+    fullText.match(/\bID:\s*(\d+)/iu) ||
     fullText.match(/"id"\s*:\s*(\d+)/) ||
     fullText.match(/media[_ ]?id\s*[:=]\s*(\d+)/iu);
   if (m) return Number(m[1]);
@@ -122,6 +123,55 @@ async function resolvePermalink(client, postId, title, postType) {
   return undefined;
 }
 
+async function uploadFeaturedFromUrl(client, url, title, excerpt) {
+  const common = {
+    title: title.slice(0, 120),
+    alt_text: title.slice(0, 180),
+    caption: excerpt.slice(0, 300),
+  };
+  try {
+    const up = await client.callTool(
+      {
+        name: "wordpress_upload_media",
+        arguments: { file_url: url, ...common },
+      },
+      undefined,
+      { timeout: reqTimeoutMs },
+    );
+    const upText = toolPayloadText(up);
+    let parsed;
+    try {
+      parsed = JSON.parse(upText);
+    } catch {
+      parsed = undefined;
+    }
+    const id = parseMediaId(upText, parsed);
+    if (typeof id === "number") return id;
+  } catch {
+    /* fallback ниже */
+  }
+  try {
+    const up2 = await client.callTool(
+      {
+        name: "wordpress_upload_image_from_url",
+        arguments: { url, ...common },
+      },
+      undefined,
+      { timeout: reqTimeoutMs },
+    );
+    const upText2 = toolPayloadText(up2);
+    let parsed2;
+    try {
+      parsed2 = JSON.parse(upText2);
+    } catch {
+      parsed2 = undefined;
+    }
+    return parseMediaId(upText2, parsed2);
+  } catch {
+    return undefined;
+  }
+}
+
 async function main() {
   const urlStr = envUrl();
   if (!urlStr) {
@@ -143,9 +193,18 @@ async function main() {
     process.exit(1);
   }
 
+  const persistContentRunId = () => {
+    const crid = process.env.CONTENT_RUN_ID?.trim();
+    if (!crid) return;
+    state.contentRunId = crid;
+    mkdirSync(ART, { recursive: true });
+    writeFileSync(statePath, JSON.stringify(state, null, 2), "utf-8");
+  };
+
   const forcePublish = process.env.WP_PUBLISH_FORCE === "true";
   const existingUrl = state.wordpressPublishedUrl?.trim();
   if (!forcePublish && existingUrl?.startsWith("http")) {
+    persistContentRunId();
     console.log(
       JSON.stringify(
         {
@@ -182,27 +241,12 @@ async function main() {
   let featuredMedia;
   if (featuredCandidate?.startsWith("http")) {
     try {
-      const up = await client.callTool(
-        {
-          name: "wordpress_upload_image_from_url",
-          arguments: {
-            url: featuredCandidate,
-            title: title.slice(0, 120),
-            alt_text: title.slice(0, 180),
-            caption: (state.metaDescription ?? "").slice(0, 300),
-          },
-        },
-        undefined,
-        { timeout: reqTimeoutMs },
+      featuredMedia = await uploadFeaturedFromUrl(
+        client,
+        featuredCandidate,
+        title,
+        state.metaDescription ?? "",
       );
-      const upText = toolPayloadText(up);
-      let parsed;
-      try {
-        parsed = JSON.parse(upText);
-      } catch {
-        parsed = undefined;
-      }
-      featuredMedia = parseMediaId(upText, parsed);
     } catch {
       featuredMedia = undefined;
     }
@@ -264,6 +308,8 @@ async function main() {
     state.wordpressPostId = wordpressPostIdGuess;
 
   mkdirSync(ART, { recursive: true });
+  const crid = process.env.CONTENT_RUN_ID?.trim();
+  if (crid) state.contentRunId = crid;
   writeFileSync(statePath, JSON.stringify(state, null, 2), "utf-8");
 
   console.log(

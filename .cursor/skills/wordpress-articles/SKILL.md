@@ -11,7 +11,9 @@ description: Автоматизация «Вордпресс статьи» дл
 
 ## Источник истины по шагам
 
-Выполняй регламент из **`prompts/wordpress-articles/MASTER_PROMPT.md`** (фазы A–J), без пропуска обязательных проверок.
+Выполняй регламент из **`prompts/wordpress-articles/MASTER_PROMPT.md`** (фазы A–J), без пропуска обязательных проверок. Для экономии контекста агента допускается опираться на **`prompts/wordpress-articles/MASTER_PROMPT_SHORT.md`** при условии соблюдения тех же обязательств.
+
+При финализации задавай **`CONTENT_RUN_ID`** или **`pipeline-state.contentRunId`**, иначе берётся самый новый run из **`content-index.json`**.
 
 ## Конфигурация цели
 

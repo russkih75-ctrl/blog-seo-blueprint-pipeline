@@ -2,7 +2,7 @@
  * После публикации в WP: синхронизирует artifacts/content-runs/<run>/publish-result.json,
  * indexnow-result.json (если есть URL) и qa-report.json с данными из pipeline-state.json.
  *
- * RunId: CONTENT_RUN_ID или первая запись в artifacts/content-index.json.
+ * RunId: CONTENT_RUN_ID → pipeline-state.contentRunId → самая новая запись в content-index (createdAt).
  */
 import { config } from "dotenv";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
@@ -17,14 +17,23 @@ const mcpKvDotenvRel = process.env.MCP_KV_DOTENV_PATH?.trim();
 if (mcpKvDotenvRel)
   config({ path: path.resolve(ROOT, mcpKvDotenvRel), override: true });
 
-function pickRunId() {
+function pickRunId(state) {
   const envId = process.env.CONTENT_RUN_ID?.trim();
   if (envId) return envId;
+  const fromState =
+    typeof state.contentRunId === "string" ? state.contentRunId.trim() : "";
+  if (fromState) return fromState;
   const indexPath = path.join(ART, "content-index.json");
   if (!existsSync(indexPath)) return null;
   const idx = JSON.parse(readFileSync(indexPath, "utf-8"));
-  const first = idx.entries?.[0];
-  return first?.runId ?? null;
+  const entries = Array.isArray(idx.entries) ? idx.entries : [];
+  if (!entries.length) return null;
+  const sorted = [...entries].sort((a, b) => {
+    const ta = Date.parse(a.createdAt ?? "") || 0;
+    const tb = Date.parse(b.createdAt ?? "") || 0;
+    return tb - ta;
+  });
+  return sorted[0]?.runId ?? null;
 }
 
 async function main() {
@@ -46,7 +55,7 @@ async function main() {
         ? Number(state.wordpressPostId)
         : undefined;
 
-  const runId = pickRunId();
+  const runId = pickRunId(state);
   if (!runId)
     throw new Error(
       "Не удалось определить runId: задайте CONTENT_RUN_ID или заполните artifacts/content-index.json",

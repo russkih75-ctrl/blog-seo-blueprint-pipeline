@@ -420,7 +420,7 @@ function appendWordpressArticlesHint(userMessage: string): string {
   if (!triggers.test(userMessage)) return "";
   return [
     "## Автоматизация «Вордпресс статьи» (целевой сайт wordprais.ru)",
-    "- Полный пошаговый регламент без пропусков: **`prompts/wordpress-articles/MASTER_PROMPT.md`**.",
+    "- Полный пошаговый регламент без пропусков: **`prompts/wordpress-articles/MASTER_PROMPT.md`**; короткая шпаргалка (меньше токенов): **`prompts/wordpress-articles/MASTER_PROMPT_SHORT.md`**.",
     "- Разметка HTML (лид, врезки, таблица, баннер 21:9 в теле, FAQ, ресурсы): **`prompts/wordpress-articles/HTML_STRUCTURE_WORDPRAIS.md`**.",
     "- Конфиг цели и Allowlist ссылок: **`config/wordpress-articles.json`**; навык агента: **`wordpress-articles`**.",
     "- Изображения через MCP **mcp-kv.ru**: **`nano_banana_pro`** — обложка **16:9**, баннер **21:9**; затем **`wordpress_upload_media`** и постоянный URL на домене сайта (см. **`npm run wp:nano-images-republish`**, **`MCP_REQUEST_TIMEOUT_MS`**).",

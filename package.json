@@ -24,7 +24,7 @@
     "wp:nano-images-republish": "node scripts/elementor-nano-republish.mjs",
     "scenario:elementor-full": "npm run build && npm run seed:elementor && npm run wp:publish-streamable && npm run elementor:nano-republish && npm run content:finalize-publish",
     "scenario:publish-complete": "npm run build && npm run content:check && npm run wp:publish-streamable && npm run content:finalize-publish",
-    "scenario:wordpress-articles": "npm run scenario:publish-complete",
+    "scenario:wordpress-articles": "npm run build && npm run content:check && npm run wp:publish-streamable && npm run content:finalize-publish",
     "scenario:wordpress-articles-with-nano": "npm run build && npm run wp:publish-streamable && npm run wp:nano-images-republish && npm run content:finalize-publish",
     "wp:publish-pipeline": "node --import tsx src/wp-publish-from-pipeline.ts",
     "wp:publish-mcp-state": "node --import tsx src/wp-publish-from-state-mcp.ts",
