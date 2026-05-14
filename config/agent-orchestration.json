@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "stages": [
+    { "id": "director", "order": 0, "label": "Director" },
+    { "id": "research", "order": 10, "label": "Research" },
+    { "id": "writer", "order": 20, "label": "Writer" },
+    { "id": "humanizer", "order": 30, "label": "Humanizer" },
+    { "id": "duplicate_guardian", "order": 40, "label": "Duplicate guardian" },
+    { "id": "publisher", "order": 50, "label": "Publisher" },
+    { "id": "supervisor", "order": 60, "label": "Supervisor QA" }
+  ]
+}
