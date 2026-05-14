@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "stages": [
+    { "id": "director", "order": 10 },
+    { "id": "research", "order": 20 },
+    { "id": "keywords", "order": 30 },
+    { "id": "seo", "order": 40 },
+    { "id": "writer", "order": 50 },
+    { "id": "humanizer", "order": 60 },
+    { "id": "duplicate_guardian", "order": 70 },
+    { "id": "media", "order": 80 },
+    { "id": "publisher", "order": 90 },
+    { "id": "supervisor", "order": 100 }
+  ]
+}

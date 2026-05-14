@@ -11,8 +11,13 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { config as loadEnv } from "dotenv";
-import type { AgentOrchestrationConfig } from "./types.js";
-import type { ContentIndex, HandoffDocument, PublishMode } from "./types.js";
+import type {
+  AgentOrchestrationConfig,
+  ContentIndex,
+  HandoffDocument,
+  OrchestrationStage,
+  PublishMode,
+} from "./types.js";
 import { evaluateDuplicate } from "./duplicate-guardian.js";
 import {
   submitSingleUrlGet,
@@ -181,7 +186,7 @@ function validateConfigs(): void {
     JSON.parse(readFileSync(p, "utf-8"));
   }
   const orch = loadOrchestration();
-  const ids = orch.stages.map((s) => s.id);
+  const ids = orch.stages.map((s: OrchestrationStage) => s.id);
   if (new Set(ids).size !== ids.length)
     throw new Error("Дубликаты id в agent-orchestration.json");
   loadStyleTemplate(REPO_ROOT);
