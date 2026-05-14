@@ -19,6 +19,8 @@
     "content:check": "node dist/content-factory/run-content-factory.js --check-only",
     "content:indexnow": "node dist/content-factory/run-content-factory.js --indexnow-only",
     "seed:elementor": "node scripts/seed-elementor-pipeline.mjs",
+    "elementor:nano-republish": "node scripts/elementor-nano-republish.mjs",
+    "scenario:elementor-full": "npm run build && npm run seed:elementor && npm run wp:publish-streamable && npm run elementor:nano-republish && npm run content:finalize-publish",
     "scenario:publish-complete": "npm run build && npm run content:check && npm run wp:publish-streamable && npm run content:finalize-publish",
     "wp:publish-pipeline": "node --import tsx src/wp-publish-from-pipeline.ts",
     "wp:publish-mcp-state": "node --import tsx src/wp-publish-from-state-mcp.ts",

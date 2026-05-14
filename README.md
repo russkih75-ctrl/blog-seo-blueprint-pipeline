@@ -101,6 +101,14 @@ npm run scenario:publish-complete
 
 Скрипт собирает проект, проверяет конфиги, вызывает **`wp:publish-streamable`** (если URL уже есть — пропуск без дубликата, см. **`WP_PUBLISH_FORCE=true`** для нового поста), затем **`content:finalize-publish`**: обновляет **`publish-result.json`**, **`indexnow-result.json`**, **`qa-report.json`** в каталоге последнего запуска из **`content-index.json`** (или **`CONTENT_RUN_ID`**).
 
+Готовая нейтральная статья про Elementor (**`seed:elementor`**) и полная публикация с **генерацией обложки и баннера через MCP** (`nano_banana_pro` / `nano_banana_2`), загрузкой в медиатеку (**`wordpress_upload_media`**) и обновлением поста:
+
+```bash
+npm run scenario:elementor-full
+```
+
+Цепочка: **`build`** → **`seed:elementor`** → **`wp:publish-streamable`** → **`elementor:nano-republish`** → **`content:finalize-publish`**. При долгой генерации изображений задайте в `.env` больший **`MCP_REQUEST_TIMEOUT_MS`** (например `900000`).
+
 ### Формат задачи в Telegram
 
 В сообщении укажите **нишу**, **ключевые фразы**, при желании **ссылку на статью-образец** (mayai и др.) — она задаёт **только структуру и стиль**, не факты и не иллюстрации текста. Факты собираются отдельно (Research). Для **обложки и горизонтального баннера** опишите или приложите **отдельный референс с вашим лицом** (или URL снимка): лицо и идентичность не меняются (`identity_lock`), меняются при необходимости фон, одежда, композиция по логике blueprint Nano.
