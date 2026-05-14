@@ -7,7 +7,34 @@
 - Вывод **без** `<html>`, `<body>`, **без** `<h1>` (заголовок записи задаётся в WordPress).
 - Иерархия: после лида — только **`##`** по смыслу через `<h2>`, подразделы `<h3>`.
 - Списки: допускай `<ul><li>` там, где перечисления улучшают GEO (как в эталоне со списками в середине статьи).
-- Таблица: минимум **одна** `<table>` с `<caption>`, `<thead>`, `<tbody>` (сравнение, чеклист или сценарии).
+- Таблица: минимум **одна** — не «голый» `<table>` без оформления (на сайте выглядит как текст без рамок). Нужен **вид как полноценная таблица в записи**: обёртка **`article-table-scroll`** + **`figure.wp-block-table`**, у **`table`** — **`border-collapse`**, общая **`border`**, у каждого **`th`/`td`** — **`border`** и **`padding`**, у шапки фон; чередование фона строк в **`tbody`** по желанию; **`caption`** сверху, выравнивание смысловое; у заголовков колонок **`scope="col"`**. Полный образец:
+
+```html
+<div class="article-table-scroll" style="overflow-x:auto;margin:1.75rem 0;-webkit-overflow-scrolling:touch">
+<figure class="wp-block-table" style="margin:0">
+<table style="width:100%;min-width:520px;border-collapse:collapse;border:1px solid #d0d0d0;font-size:0.95rem;line-height:1.45;background:#fff;box-sizing:border-box">
+<caption style="caption-side:top;text-align:left;font-weight:600;padding:0 4px 12px 4px;color:#1a1a1a">Подпись к таблице</caption>
+<thead>
+<tr style="background:#f0f4f8">
+<th scope="col" style="border:1px solid #d0d0d0;padding:11px 14px;text-align:left;font-weight:600">Колонка A</th>
+<th scope="col" style="border:1px solid #d0d0d0;padding:11px 14px;text-align:left;font-weight:600">Колонка B</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="border:1px solid #d0d0d0;padding:11px 14px;vertical-align:top">…</td>
+<td style="border:1px solid #d0d0d0;padding:11px 14px;vertical-align:top">…</td>
+</tr>
+<tr style="background:#fafbfc">
+<td style="border:1px solid #d0d0d0;padding:11px 14px;vertical-align:top">…</td>
+<td style="border:1px solid #d0d0d0;padding:11px 14px;vertical-align:top">…</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</div>
+```
+
 - Иллюстрация в теле: один блок **до или после первого крупного раздела** (как «горизонтальный баннер» blueprint):
 
 ```html

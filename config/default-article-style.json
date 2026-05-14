@@ -25,7 +25,7 @@
     },
     {
       "id": "tables",
-      "role": "≥1 таблица сравнения, чек-листа или сценариев"
+      "role": "≥1 таблица сравнения или чек-листа: вёрстка с видимыми границами ячеек (рамки, padding, шапка), как в prompts/wordpress-articles/HTML_STRUCTURE_WORDPRAIS.md — не минималистичный table без стилей"
     },
     {
       "id": "implementation_scenarios",
