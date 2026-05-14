@@ -111,6 +111,8 @@ npm run scenario:wordpress-articles
 
 В Telegram: **`/schedule_queue_every 3h`** — каждые 3 часа новая тема из этой очереди (бот подставляет **`taskRu`** автоматически). Обычное **`/schedule_every`** повторяет один и тот же сохранённый текст и сбрасывает режим очереди.
 
+**Cursor Automations** ([cursor.com/automations](https://cursor.com/automations)): автоматизацию нужно создать в аккаунте Cursor (веб-UI); в репозитории лежит готовый шаблон промпта и настройки триггера — **`.cursor/automations/wordpress-articles-wordstat-3h.md`** (обзор: **`.cursor/automations/README.md`**).
+
 Опционально: **`WORDSTAT_AUTOMATION_CONFIG`** — путь к своей копии JSON-конфига очереди.
 
 Уточнение по **`content:finalize-publish`**: run берётся из **`CONTENT_RUN_ID`**, затем из **`pipeline-state.json` → `contentRunId`** (проставляется **`seed:elementor`** / **`wp:publish-streamable`** при заданном **`CONTENT_RUN_ID`**), иначе — **самая новая** запись в **`content-index.json`** по полю **`createdAt`** (раньше ошибочно бралась самая старая).
