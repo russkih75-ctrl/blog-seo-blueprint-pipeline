@@ -81,12 +81,15 @@
     "minimumContentHeadingsH2H3": 8,
     "minimumFaqDetails": 5,
     "maxHumanizerSlopHits": 3,
+    "maxDuplicateHeadingOccurrences": 1,
     "requiredHtmlMarkers": [
       "article-table-scroll",
       "wp-block-table",
       "scope=\"col\"",
       "article-banner",
-      "<details"
+      "<details",
+      "Остались вопросы",
+      "пишите в комментариях"
     ],
     "forbiddenHtmlMarkers": [
       "NEEDS_REWRITE",

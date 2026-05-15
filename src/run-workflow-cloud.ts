@@ -497,6 +497,7 @@ function loadQualityHardGates(): {
   minimumContentHeadingsH2H3: number;
   minimumFaqDetails: number;
   maxHumanizerSlopHits: number;
+  maxDuplicateHeadingOccurrences: number;
   requiredHtmlMarkers: string[];
   forbiddenHtmlMarkers: string[];
   humanizerSlopMarkers: string[];
@@ -507,12 +508,15 @@ function loadQualityHardGates(): {
     minimumContentHeadingsH2H3: 8,
     minimumFaqDetails: 5,
     maxHumanizerSlopHits: 3,
+    maxDuplicateHeadingOccurrences: 1,
     requiredHtmlMarkers: [
       "article-table-scroll",
       "wp-block-table",
       "scope=\"col\"",
       "article-banner",
       "<details",
+      "Остались вопросы",
+      "пишите в комментариях",
     ],
     forbiddenHtmlMarkers: [
       "NEEDS_REWRITE",
@@ -559,6 +563,9 @@ function loadQualityHardGates(): {
       maxHumanizerSlopHits:
         Number(cfg.hardGates?.maxHumanizerSlopHits) ||
         fallback.maxHumanizerSlopHits,
+      maxDuplicateHeadingOccurrences:
+        Number(cfg.hardGates?.maxDuplicateHeadingOccurrences) ||
+        fallback.maxDuplicateHeadingOccurrences,
       requiredHtmlMarkers:
         cfg.hardGates?.requiredHtmlMarkers ?? fallback.requiredHtmlMarkers,
       forbiddenHtmlMarkers:
@@ -579,6 +586,28 @@ function humanizerSlopHits(text: string, markers: readonly string[]): string[] {
 
 function hasAllMarkers(html: string, markers: readonly string[]): boolean {
   return markers.every((marker) => html.includes(marker));
+}
+
+function normalizeHeading(text: string): string {
+  return stripHtmlTags(text)
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[^\p{L}\p{N}\s:-]/gu, "")
+    .trim();
+}
+
+function duplicateHeadings(html: string): Array<{ heading: string; count: number }> {
+  const counts = new Map<string, number>();
+  const re = /<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(html)) !== null) {
+    const heading = normalizeHeading(match[1] ?? "");
+    if (!heading) continue;
+    counts.set(heading, (counts.get(heading) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([heading, count]) => ({ heading, count }));
 }
 
 function computeQualityGates(html: string, state: SavedState): Record<string, boolean> {
@@ -611,7 +640,10 @@ function computeQualityGates(html: string, state: SavedState): Record<string, bo
     hasRequiredMarkers &&
     !hasForbiddenMarkers &&
     !/<h1\b/i.test(html) &&
-    tableOk;
+    tableOk &&
+    duplicateHeadings(html).every(
+      (item) => item.count <= hard.maxDuplicateHeadingOccurrences,
+    );
 
   return {
     seoContentWriterPassed: Boolean(state.seoTitle) && depthOk && tableOk,
@@ -650,6 +682,16 @@ function articleQualityFindings(
   if (/<h1\b/i.test(html)) findings.push({ code: "h1_inside_post_body" });
   for (const marker of hard.requiredHtmlMarkers) {
     if (!html.includes(marker)) findings.push({ code: "missing_html_marker", marker });
+  }
+  for (const item of duplicateHeadings(html)) {
+    if (item.count > hard.maxDuplicateHeadingOccurrences) {
+      findings.push({
+        code: "duplicate_h2_h3_heading",
+        heading: item.heading,
+        actual: item.count,
+        expected: `<=${hard.maxDuplicateHeadingOccurrences}`,
+      });
+    }
   }
   if (details < hard.minimumFaqDetails)
     findings.push({
@@ -1167,6 +1209,8 @@ Strict publication gates:
 - Then act as content-structure-director and reject weak output yourself.
 - Return only final HTML with no html/body and no markdown.
 - Final HTML must contain >=12000 useful text characters, >=8 meaningful H2/H3, article-table-scroll + wp-block-table with inline borders/padding/caption/scope, article-banner, >=5 FAQ <details>, useful resources, and next steps.
+- Every H2/H3 heading must be unique. Never repeat generic headings like "Практический нюанс внедрения"; use specific headings tied to the current section.
+- In one or two logical places, naturally add this CTA text or a very close variant: "Остались вопросы или нужна помощь? Контакты в шапке профиля, или пишите в комментариях." It must fit the section and not look like a random ad.
 - If you cannot satisfy every item, return NEEDS_REWRITE instead of a short article.`;
 
   state.articleHtml = await cursorCloud(

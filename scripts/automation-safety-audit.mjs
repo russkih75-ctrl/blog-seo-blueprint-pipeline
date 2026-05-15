@@ -101,10 +101,25 @@ const findings = [
   ),
   check(
     publish.includes("forbidden_html_marker") &&
-      publish.includes("humanizer_slop_markers_too_many"),
+      publish.includes("humanizer_slop_markers_too_many") &&
+      publish.includes("duplicate_h2_h3_heading"),
     "publish_script_missing_secondary_quality_gates",
     "blocker",
     "scripts/wp-publish-streamable.mjs",
+  ),
+  check(
+    cloud.includes("duplicate_h2_h3_heading") &&
+      cloud.includes("Остались вопросы") &&
+      cloud.includes("пишите в комментариях"),
+    "cloud_missing_heading_or_cta_gate",
+    "blocker",
+    "Expected duplicate heading gate and natural CTA gate.",
+  ),
+  check(
+    readText("scripts/wp-wordstat-queue-next.mjs").includes("canonicalTopicKey"),
+    "queue_missing_canonical_topic_guard",
+    "blocker",
+    "Wordstat queue must block reused base topic keys, not only exact phrases.",
   ),
   check(
     nano.includes("module `5`") &&

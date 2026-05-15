@@ -45,6 +45,18 @@ function normalizeFingerprint(text) {
     .trim();
 }
 
+function canonicalTopicKey(text, words = 4) {
+  const tokens = normalizeFingerprint(text)
+    .split(/\s+/)
+    .filter(Boolean);
+  const tokenSet = new Set(tokens);
+  if (tokenSet.has("wordpress") && tokenSet.has("разработка")) return "wordpress разработка";
+  if (tokenSet.has("wordpress") && tokenSet.has("elementor")) return "wordpress elementor";
+  const weak = new Set(["сайт", "сайта", "сайтов", "на", "для", "под", "и", "в", "с", "по"]);
+  const strongTokens = tokens.filter((token) => !weak.has(token));
+  return (strongTokens.length ? strongTokens : tokens).slice(0, Math.max(2, words)).join(" ");
+}
+
 function readJsonSafe(p, fallback) {
   try {
     if (!existsSync(p)) return fallback;
@@ -97,15 +109,42 @@ function contentIndexBlockedNorms(entries) {
   return out;
 }
 
+function contentIndexBlockedTopicKeys(entries) {
+  const out = new Set();
+  for (const entry of entries) {
+    if (!indexEntryBlocksPhrase(entry)) continue;
+    for (const key of [
+      "canonicalTopicKey",
+      "phrase",
+      "normalizedPhrase",
+      "primaryKeyword",
+      "primaryKeywordNorm",
+      "keywordNorm",
+      "title",
+    ]) {
+      const value = entry[key];
+      if (typeof value !== "string") continue;
+      const topicKey = canonicalTopicKey(value);
+      if (topicKey) out.add(topicKey);
+    }
+  }
+  return out;
+}
+
 function collisionWithIndex(phrase, entries) {
   const np = normalizeFingerprint(phrase);
+  const cp = canonicalTopicKey(phrase);
   const sp = slugifyPrimary(phrase);
   if (!np) return true;
   for (const e of entries) {
     const t = e.title ? normalizeFingerprint(String(e.title)) : "";
     const pk = e.primaryKeyword ? normalizeFingerprint(String(e.primaryKeyword)) : "";
+    const tk = e.title ? canonicalTopicKey(String(e.title)) : "";
+    const ptk = e.primaryKeyword ? canonicalTopicKey(String(e.primaryKeyword)) : "";
     if (t && t === np) return true;
     if (pk && pk === np) return true;
+    if (tk && tk === cp) return true;
+    if (ptk && ptk === cp) return true;
     if (e.slug && String(e.slug).toLowerCase() === sp) return true;
   }
   return false;
@@ -123,6 +162,9 @@ function defaultCursor() {
     emittedPhrasesNorm: [],
     pendingPhrasesNorm: [],
     processedPhrasesNorm: [],
+    emittedTopicKeys: [],
+    pendingTopicKeys: [],
+    processedTopicKeys: [],
     phraseStateByNorm: {},
   };
 }
@@ -171,7 +213,18 @@ function pickNextPhrase(cfg, cursor, indexEntries, excludedSet) {
       .map((x) => normalizeFingerprint(String(x)))
       .filter(Boolean),
   );
+  const topicSet = new Set(
+    [
+      ...(cfg.blockedCanonicalTopicKeys ?? []),
+      ...(cursor.emittedTopicKeys ?? []),
+      ...(cursor.pendingTopicKeys ?? []),
+      ...(cursor.processedTopicKeys ?? []),
+    ]
+      .map((x) => normalizeFingerprint(String(x)))
+      .filter(Boolean),
+  );
   const blockedIndexSet = contentIndexBlockedNorms(indexEntries);
+  const blockedTopicSet = contentIndexBlockedTopicKeys(indexEntries);
   const blockingIndexEntries = indexEntries.filter(indexEntryBlocksPhrase);
 
   for (let attempt = 0; attempt < n * 8; attempt++) {
@@ -189,21 +242,27 @@ function pickNextPhrase(cfg, cursor, indexEntries, excludedSet) {
       const phrase = String(q.phrase ?? "").trim();
       if (!phrase) continue;
       const nn = normalizeFingerprint(phrase);
+      const topicKey = canonicalTopicKey(phrase);
       if (excludedBranded.has(nn)) continue;
       if (excludedSet.has(nn)) continue;
       if (emittedSet.has(nn)) continue;
+      if (topicKey && topicSet.has(topicKey)) continue;
       if (blockedIndexSet.has(nn)) continue;
+      if (topicKey && blockedTopicSet.has(topicKey)) continue;
       if (collisionWithIndex(phrase, blockingIndexEntries)) continue;
 
       cursor.seedPointer = (si + 1) % n;
       cursor.queryOffsetBySeed[seed.id] = j + 1;
       cursor.emittedPhrasesNorm = pushUniqueCapped(cursor.emittedPhrasesNorm ?? [], nn);
       cursor.pendingPhrasesNorm = pushUniqueCapped(cursor.pendingPhrasesNorm ?? [], nn);
+      cursor.emittedTopicKeys = pushUniqueCapped(cursor.emittedTopicKeys ?? [], topicKey);
+      cursor.pendingTopicKeys = pushUniqueCapped(cursor.pendingTopicKeys ?? [], topicKey);
       cursor.phraseStateByNorm = {
         ...(cursor.phraseStateByNorm ?? {}),
         [nn]: {
           state: "pending",
           phrase,
+          canonicalTopicKey: topicKey,
           seedId: seed.id,
           emittedAt: new Date().toISOString(),
         },

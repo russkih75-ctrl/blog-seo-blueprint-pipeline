@@ -20,7 +20,9 @@ Treat `content-structure-director` as the mandatory supervisor. It may block pub
 Required subordinate roles:
 
 - `queue-keyword-guardian`: protects Wordstat queue state and prevents duplicate/processed keywords.
+- `topic-canonicalization-guardian`: blocks already used canonical topic keys, not only exact phrase matches.
 - `duplicate-title-meta-guardian`: checks title, slug, meta, primary keyword and `artifacts/content-index.json`.
+- `heading-uniqueness-guardian`: blocks repeated H2/H3 headings, especially generic headings such as `Практический нюанс внедрения`.
 - `seo-content-writer`: ensures real depth, search intent fit, useful sections, internal links and practical value.
 - `geo-ai-search-optimizer`: ensures direct answers, FAQ/details, tables, schema-ready structure and AI-quotable blocks.
 - `russian-humanizer`: removes AI-slop, empty formalism, template triplets, fake authority and unnatural Russian.
@@ -55,6 +57,8 @@ Block publication if any item fails:
 
 - final HTML has fewer than 12000 useful text characters;
 - fewer than 8 meaningful H2/H3 sections;
+- any H2/H3 heading is repeated more than once;
+- missing a natural CTA in one or two relevant places: `Остались вопросы или нужна помощь? Контакты в шапке профиля, или пишите в комментариях.`;
 - missing `article-table-scroll`, `wp-block-table`, `scope="col"`, `article-banner`, or at least 5 FAQ `<details>`;
 - table does not match the WordPrais inline style with `border-collapse: collapse` and `padding: 11px 14px`;
 - article body contains `<h1>`;

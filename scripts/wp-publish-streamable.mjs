@@ -165,6 +165,7 @@ function articleQualityFindings(html, state) {
   const minHeadings = Number(hard.minimumContentHeadingsH2H3 ?? 8);
   const minFaqDetails = Number(hard.minimumFaqDetails ?? 5);
   const maxHumanizerSlopHits = Number(hard.maxHumanizerSlopHits ?? 3);
+  const maxDuplicateHeadingOccurrences = Number(hard.maxDuplicateHeadingOccurrences ?? 1);
   const text = stripTags(html);
   const headings = countMatches(html, /<h[23]\b/gi);
   const details = countMatches(html, /<details\b/gi);
@@ -179,6 +180,29 @@ function articleQualityFindings(html, state) {
   for (const marker of hard.requiredHtmlMarkers ?? []) {
     if (!String(html).includes(marker))
       findings.push({ code: "missing_html_marker", marker, severity: "blocker" });
+  }
+  const headingCounts = new Map();
+  const headingRe = /<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/gi;
+  let headingMatch;
+  while ((headingMatch = headingRe.exec(String(html))) !== null) {
+    const heading = stripTags(headingMatch[1] ?? "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .replace(/[^\p{L}\p{N}\s:-]/gu, "")
+      .trim();
+    if (!heading) continue;
+    headingCounts.set(heading, (headingCounts.get(heading) ?? 0) + 1);
+  }
+  for (const [heading, count] of headingCounts.entries()) {
+    if (count > maxDuplicateHeadingOccurrences) {
+      findings.push({
+        code: "duplicate_h2_h3_heading",
+        severity: "blocker",
+        heading,
+        actual: count,
+        expected: `<=${maxDuplicateHeadingOccurrences}`,
+      });
+    }
   }
   if (details < minFaqDetails)
     findings.push({ code: "faq_details_too_few", severity: "blocker", actual: details, expected: `>=${minFaqDetails}` });

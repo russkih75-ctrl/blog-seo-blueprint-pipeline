@@ -60,6 +60,18 @@ function normalizeFingerprint(text) {
     .trim();
 }
 
+function canonicalTopicKey(text, words = 4) {
+  const tokens = normalizeFingerprint(text)
+    .split(/\s+/)
+    .filter(Boolean);
+  const tokenSet = new Set(tokens);
+  if (tokenSet.has("wordpress") && tokenSet.has("разработка")) return "wordpress разработка";
+  if (tokenSet.has("wordpress") && tokenSet.has("elementor")) return "wordpress elementor";
+  const weak = new Set(["сайт", "сайта", "сайтов", "на", "для", "под", "и", "в", "с", "по"]);
+  const strongTokens = tokens.filter((token) => !weak.has(token));
+  return (strongTokens.length ? strongTokens : tokens).slice(0, Math.max(2, words)).join(" ");
+}
+
 function readJsonSafe(p, fallback) {
   try {
     if (!existsSync(p)) return fallback;
@@ -130,6 +142,9 @@ function syncDurableKeywordState({
   const norm = normalizeFingerprint(
     entry?.normalizedPhrase ?? entry?.primaryKeywordNorm ?? entry?.keywordNorm ?? phrase,
   );
+  const topicKey = canonicalTopicKey(
+    entry?.canonicalTopicKey ?? entry?.primaryKeyword ?? entry?.title ?? phrase,
+  );
 
   if (!entry && (phrase || pubUrl)) {
     entry = {
@@ -147,6 +162,7 @@ function syncDurableKeywordState({
     if (postId != null) entry.postId = postId;
     if (phrase && !entry.primaryKeyword) entry.primaryKeyword = phrase;
     if (norm) entry.normalizedPhrase = norm;
+    if (topicKey) entry.canonicalTopicKey = topicKey;
     entry.publishStatus = publishResult.status;
     entry.mediaStatus = mediaOk ? "ok" : "pending";
     entry.verificationStatus = verificationOk ? "verified" : "pending";
@@ -163,12 +179,14 @@ function syncDurableKeywordState({
     const cursor = readJsonSafe(CURSOR_PATH, null);
     if (cursor && typeof cursor === "object") {
       cursor.emittedPhrasesNorm = pushUnique(cursor.emittedPhrasesNorm ?? [], norm);
+      if (topicKey) cursor.emittedTopicKeys = pushUnique(cursor.emittedTopicKeys ?? [], topicKey);
       cursor.phraseStateByNorm = {
         ...(cursor.phraseStateByNorm ?? {}),
         [norm]: {
           ...(cursor.phraseStateByNorm?.[norm] ?? {}),
           state: processed ? "processed" : "pending",
           phrase: phrase ?? cursor.phraseStateByNorm?.[norm]?.phrase,
+          canonicalTopicKey: topicKey || cursor.phraseStateByNorm?.[norm]?.canonicalTopicKey,
           runId,
           updatedAt: now,
           processedAt: processed
@@ -182,6 +200,14 @@ function syncDurableKeywordState({
       cursor.processedPhrasesNorm = processed
         ? pushUnique(cursor.processedPhrasesNorm ?? [], norm)
         : cursor.processedPhrasesNorm ?? [];
+      if (topicKey) {
+        cursor.pendingTopicKeys = processed
+          ? removeNorm(cursor.pendingTopicKeys ?? [], topicKey)
+          : pushUnique(cursor.pendingTopicKeys ?? [], topicKey);
+        cursor.processedTopicKeys = processed
+          ? pushUnique(cursor.processedTopicKeys ?? [], topicKey)
+          : cursor.processedTopicKeys ?? [];
+      }
       writeJsonAtomic(CURSOR_PATH, cursor);
     }
   }

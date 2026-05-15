@@ -1,6 +1,12 @@
 {
   "version": 1,
   "targetSite": "https://wordprais.ru/",
+  "blockedCanonicalTopicKeys": [
+    "wordpress разработка",
+    "wordpress elementor",
+    "разработка сайта на wordpress",
+    "elementor для wordpress конструктор"
+  ],
   "meta": {
     "regionCode": 225,
     "regionLabel": "Россия",
