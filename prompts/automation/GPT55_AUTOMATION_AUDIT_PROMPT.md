@@ -23,6 +23,9 @@ Required subordinate roles:
 - `topic-canonicalization-guardian`: blocks already used canonical topic keys, not only exact phrase matches.
 - `duplicate-title-meta-guardian`: checks title, slug, meta, primary keyword and `artifacts/content-index.json`.
 - `heading-uniqueness-guardian`: blocks repeated H2/H3 headings, especially generic headings such as `Практический нюанс внедрения`.
+- `mayai-structure-guardian`: blocks articles that do not follow the mayai-like useful guide structure: direct answer, table of contents, practical sections, decision table, FAQ, resources, next steps.
+- `html-semantics-guardian`: blocks invalid post-body HTML, duplicated paragraphs, missing JSON-LD, weak image alt text, missing internal links and thin sections.
+- `meta-media-guardian`: blocks invalid title/meta lengths, missing permanent cover/banner, missing alt/caption metadata and non-permanent media.
 - `seo-content-writer`: ensures real depth, search intent fit, useful sections, internal links and practical value.
 - `geo-ai-search-optimizer`: ensures direct answers, FAQ/details, tables, schema-ready structure and AI-quotable blocks.
 - `russian-humanizer`: removes AI-slop, empty formalism, template triplets, fake authority and unnatural Russian.
@@ -59,6 +62,10 @@ Block publication if any item fails:
 - fewer than 8 meaningful H2/H3 sections;
 - any H2/H3 heading is repeated more than once;
 - missing a natural CTA in one or two relevant places: `Остались вопросы или нужна помощь? Контакты в шапке профиля, или пишите в комментариях.`;
+- repeated paragraphs, cloned filler sections, generic headings, or thin sections remain;
+- missing article-toc, JSON-LD, useful internal links, image alt text, or visible article-banner image;
+- SEO title is outside configured length or meta description is outside configured length;
+- article is not clearly tied to the selected Wordstat keyword/topic;
 - missing `article-table-scroll`, `wp-block-table`, `scope="col"`, `article-banner`, or at least 5 FAQ `<details>`;
 - table does not match the WordPrais inline style with `border-collapse: collapse` and `padding: 11px 14px`;
 - article body contains `<h1>`;

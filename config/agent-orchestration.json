@@ -20,6 +20,22 @@
         "responsibility": "Checks title, slug, meta, primary keyword and content-index collisions before publish."
       },
       {
+        "id": "keyword-topic-uniqueness-guardian",
+        "responsibility": "Blocks reused canonical topic keys, exact keyword reuse, and title/slug drift away from the selected Wordstat phrase."
+      },
+      {
+        "id": "mayai-structure-guardian",
+        "responsibility": "Checks mayai-like useful guide structure: direct answer, table of contents, dense practical blocks, comparison table, FAQ/details, next steps, and no thin filler sections."
+      },
+      {
+        "id": "html-semantics-guardian",
+        "responsibility": "Validates post-body HTML: no H1 in body, unique H2/H3, valid image src/alt, JSON-LD, accessible tables, internal links, and no duplicated paragraphs."
+      },
+      {
+        "id": "meta-media-guardian",
+        "responsibility": "Validates SEO title length, meta description length, featured cover, in-article banner, alt text, captions, and permanent WordPress/CDN media URLs."
+      },
+      {
         "id": "seo-content-writer",
         "responsibility": "Ensures useful article depth, search intent fit, keyword coverage, internal links, headings and practical sections."
       },
@@ -71,6 +87,26 @@
       "artifactField": "mediaDirectorPassed"
     },
     {
+      "id": "keyword-topic-uniqueness-guardian",
+      "required": true,
+      "artifactField": "keywordTopicUniquenessGuardianPassed"
+    },
+    {
+      "id": "mayai-structure-guardian",
+      "required": true,
+      "artifactField": "mayaiStructureGuardianPassed"
+    },
+    {
+      "id": "html-semantics-guardian",
+      "required": true,
+      "artifactField": "htmlSemanticsGuardianPassed"
+    },
+    {
+      "id": "meta-media-guardian",
+      "required": true,
+      "artifactField": "metaMediaGuardianPassed"
+    },
+    {
       "id": "content-structure-director",
       "required": true,
       "artifactField": "contentStructureDirectorPassed"
@@ -79,15 +115,42 @@
   "hardGates": {
     "minimumFinalHtmlCharacters": 12000,
     "minimumContentHeadingsH2H3": 8,
+    "minimumH2": 7,
+    "minimumH3": 3,
+    "minimumParagraphs": 24,
+    "minimumInternalLinks": 4,
+    "minimumArticleImages": 1,
+    "minimumJsonLdScripts": 1,
+    "minimumUsefulSectionCharacters": 180,
+    "maxThinSections": 1,
     "minimumFaqDetails": 5,
     "maxHumanizerSlopHits": 3,
     "maxDuplicateHeadingOccurrences": 1,
+    "maxDuplicateParagraphOccurrences": 1,
+    "titleMinCharacters": 45,
+    "titleMaxCharacters": 120,
+    "metaDescriptionMinCharacters": 90,
+    "metaDescriptionMaxCharacters": 170,
+    "requiredHeadingUnique": true,
+    "requiredPrimaryKeywordCoverage": true,
+    "requiredMayaiLikeStructure": true,
+    "requiredJsonLd": true,
+    "requiredImageAltText": true,
+    "forbiddenGenericHeadings": [
+      "Практический нюанс внедрения",
+      "Важный нюанс",
+      "Дополнительный блок",
+      "Полезная информация",
+      "Что важно знать"
+    ],
     "requiredHtmlMarkers": [
       "article-table-scroll",
       "wp-block-table",
       "scope=\"col\"",
       "article-banner",
       "<details",
+      "article-toc",
+      "application/ld+json",
       "Остались вопросы",
       "пишите в комментариях"
     ],

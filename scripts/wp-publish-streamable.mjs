@@ -149,6 +149,91 @@ function countMatches(text, pattern) {
   return (String(text ?? "").match(pattern) ?? []).length;
 }
 
+function extractBlocks(html, tag) {
+  const out = [];
+  const re = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "gi");
+  let match;
+  while ((match = re.exec(String(html ?? ""))) !== null) out.push(match[1] ?? "");
+  return out;
+}
+
+function normalizeHeadingText(text) {
+  return stripTags(text)
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[^\p{L}\p{N}\s:-]/gu, "")
+    .trim();
+}
+
+function duplicateParagraphs(html) {
+  const counts = new Map();
+  for (const raw of extractBlocks(html, "p")) {
+    const paragraph = stripTags(raw).toLowerCase().replace(/\s+/g, " ").trim();
+    if (paragraph.length < 90) continue;
+    counts.set(paragraph, (counts.get(paragraph) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([paragraph, count]) => ({ paragraph: paragraph.slice(0, 180), count }));
+}
+
+function thinSections(html, minChars) {
+  const out = [];
+  const re = /<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>([\s\S]*?)(?=<h[23]\b|$)/gi;
+  let match;
+  while ((match = re.exec(String(html ?? ""))) !== null) {
+    const heading = normalizeHeadingText(match[1] ?? "");
+    const chars = stripTags(match[2] ?? "").length;
+    if (heading && chars < minChars) out.push({ heading, chars });
+  }
+  return out;
+}
+
+function imageIssues(html) {
+  const issues = [];
+  const re = /<img\b([^>]*?)>/gi;
+  let match;
+  let index = 0;
+  while ((match = re.exec(String(html ?? ""))) !== null) {
+    index += 1;
+    const attrs = match[1] ?? "";
+    const src = attrs.match(/\bsrc\s*=\s*["']([^"']+)["']/i)?.[1]?.trim() ?? "";
+    const alt = attrs.match(/\balt\s*=\s*["']([^"']*)["']/i)?.[1]?.trim() ?? "";
+    if (!/^https?:\/\//i.test(src)) issues.push({ index, code: "image_missing_http_src", severity: "blocker" });
+    if (!alt || alt.length < 12) issues.push({ index, code: "image_missing_useful_alt", severity: "blocker" });
+  }
+  return issues;
+}
+
+function normalizedTokenSet(text) {
+  return new Set(
+    stripTags(text)
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 4),
+  );
+}
+
+function keywordCoverageOk(state, html) {
+  const source = [state.seeds?.k1, state.seeds?.k2, state.seeds?.k3, state.wordstatSynth]
+    .filter(Boolean)
+    .join(" ");
+  const sourceTokens = [...normalizedTokenSet(source)].filter(
+    (token) => !["wordpress", "wordprais"].includes(token),
+  );
+  if (sourceTokens.length === 0) return true;
+  const titleAndHtml = normalizedTokenSet(`${state.seoTitle ?? ""} ${html}`);
+  const covered = sourceTokens.filter((token) => titleAndHtml.has(token)).length;
+  return covered >= Math.min(2, sourceTokens.length);
+}
+
+function metaOk(meta, min, max) {
+  const text = stripTags(meta ?? "").replace(/\s+/g, " ").trim();
+  return text.length >= min && text.length <= max && !/NEEDS_REWRITE|Lorem ipsum/i.test(text);
+}
+
 function loadQualityConfig() {
   try {
     if (!existsSync(qualityConfigPath)) return {};
@@ -163,11 +248,30 @@ function articleQualityFindings(html, state) {
   const hard = cfg.hardGates ?? {};
   const minChars = Number(hard.minimumFinalHtmlCharacters ?? 12000);
   const minHeadings = Number(hard.minimumContentHeadingsH2H3 ?? 8);
+  const minH2 = Number(hard.minimumH2 ?? 7);
+  const minH3 = Number(hard.minimumH3 ?? 3);
+  const minParagraphs = Number(hard.minimumParagraphs ?? 24);
+  const minInternalLinks = Number(hard.minimumInternalLinks ?? 4);
+  const minArticleImages = Number(hard.minimumArticleImages ?? 1);
+  const minJsonLdScripts = Number(hard.minimumJsonLdScripts ?? 1);
+  const minUsefulSectionCharacters = Number(hard.minimumUsefulSectionCharacters ?? 180);
+  const maxThinSections = Number(hard.maxThinSections ?? 1);
   const minFaqDetails = Number(hard.minimumFaqDetails ?? 5);
   const maxHumanizerSlopHits = Number(hard.maxHumanizerSlopHits ?? 3);
   const maxDuplicateHeadingOccurrences = Number(hard.maxDuplicateHeadingOccurrences ?? 1);
+  const maxDuplicateParagraphOccurrences = Number(hard.maxDuplicateParagraphOccurrences ?? 1);
+  const titleMinCharacters = Number(hard.titleMinCharacters ?? 45);
+  const titleMaxCharacters = Number(hard.titleMaxCharacters ?? 120);
+  const metaDescriptionMinCharacters = Number(hard.metaDescriptionMinCharacters ?? 90);
+  const metaDescriptionMaxCharacters = Number(hard.metaDescriptionMaxCharacters ?? 170);
   const text = stripTags(html);
   const headings = countMatches(html, /<h[23]\b/gi);
+  const h2 = countMatches(html, /<h2\b/gi);
+  const h3 = countMatches(html, /<h3\b/gi);
+  const paragraphs = countMatches(html, /<p\b/gi);
+  const internalLinks = countMatches(html, /<a\b[^>]+href=["']https?:\/\/wordprais\.ru\//gi);
+  const articleImages = countMatches(html, /<img\b/gi);
+  const jsonLdScripts = countMatches(html, /<script\b[^>]+application\/ld\+json/gi);
   const details = countMatches(html, /<details\b/gi);
   const findings = [];
 
@@ -175,6 +279,18 @@ function articleQualityFindings(html, state) {
     findings.push({ code: "article_too_short", severity: "blocker", actual: text.length, expected: `>=${minChars}` });
   if (headings < minHeadings)
     findings.push({ code: "not_enough_h2_h3", severity: "blocker", actual: headings, expected: `>=${minHeadings}` });
+  if (h2 < minH2)
+    findings.push({ code: "not_enough_h2", severity: "blocker", actual: h2, expected: `>=${minH2}` });
+  if (h3 < minH3)
+    findings.push({ code: "not_enough_h3", severity: "blocker", actual: h3, expected: `>=${minH3}` });
+  if (paragraphs < minParagraphs)
+    findings.push({ code: "not_enough_paragraphs", severity: "blocker", actual: paragraphs, expected: `>=${minParagraphs}` });
+  if (internalLinks < minInternalLinks)
+    findings.push({ code: "not_enough_internal_links", severity: "blocker", actual: internalLinks, expected: `>=${minInternalLinks}` });
+  if (articleImages < minArticleImages)
+    findings.push({ code: "missing_article_images", severity: "blocker", actual: articleImages, expected: `>=${minArticleImages}` });
+  if (jsonLdScripts < minJsonLdScripts)
+    findings.push({ code: "missing_schema_json_ld", severity: "blocker", actual: jsonLdScripts, expected: `>=${minJsonLdScripts}` });
   if (/<h1\b/i.test(html))
     findings.push({ code: "h1_inside_post_body", severity: "blocker" });
   for (const marker of hard.requiredHtmlMarkers ?? []) {
@@ -204,6 +320,55 @@ function articleQualityFindings(html, state) {
       });
     }
   }
+  for (const item of duplicateParagraphs(html)) {
+    if (item.count > maxDuplicateParagraphOccurrences) {
+      findings.push({
+        code: "duplicate_paragraph",
+        severity: "blocker",
+        paragraph: item.paragraph,
+        actual: item.count,
+        expected: `<=${maxDuplicateParagraphOccurrences}`,
+      });
+    }
+  }
+  const thin = thinSections(html, minUsefulSectionCharacters);
+  if (thin.length > maxThinSections) {
+    findings.push({
+      code: "too_many_thin_sections",
+      severity: "blocker",
+      actual: thin.length,
+      expected: `<=${maxThinSections}`,
+      examples: thin.slice(0, 5),
+    });
+  }
+  for (const generic of hard.forbiddenGenericHeadings ?? []) {
+    const needle = normalizeHeadingText(generic);
+    const hasGeneric = extractBlocks(html, "h2")
+      .concat(extractBlocks(html, "h3"))
+      .map(normalizeHeadingText)
+      .some((heading) => heading === needle || heading.includes(needle));
+    if (hasGeneric) findings.push({ code: "generic_heading_forbidden", heading: generic, severity: "blocker" });
+  }
+  for (const issue of imageIssues(html)) findings.push(issue);
+  const titleLength = stripTags(state.seoTitle ?? "").length;
+  if (titleLength < titleMinCharacters || titleLength > titleMaxCharacters) {
+    findings.push({
+      code: "invalid_seo_title_length",
+      severity: "blocker",
+      actual: titleLength,
+      expected: `${titleMinCharacters}-${titleMaxCharacters}`,
+    });
+  }
+  if (!metaOk(state.metaDescription, metaDescriptionMinCharacters, metaDescriptionMaxCharacters)) {
+    findings.push({
+      code: "invalid_meta_description",
+      severity: "blocker",
+      actual: stripTags(state.metaDescription ?? "").length,
+      expected: `${metaDescriptionMinCharacters}-${metaDescriptionMaxCharacters}`,
+    });
+  }
+  if (!keywordCoverageOk(state, html))
+    findings.push({ code: "primary_keyword_not_covered", severity: "blocker" });
   if (details < minFaqDetails)
     findings.push({ code: "faq_details_too_few", severity: "blocker", actual: details, expected: `>=${minFaqDetails}` });
   if (!/border-collapse\s*:\s*collapse/i.test(html))

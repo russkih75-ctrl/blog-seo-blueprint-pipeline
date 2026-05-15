@@ -495,9 +495,23 @@ function countRegex(text: string, pattern: RegExp): number {
 function loadQualityHardGates(): {
   minimumFinalHtmlCharacters: number;
   minimumContentHeadingsH2H3: number;
+  minimumH2: number;
+  minimumH3: number;
+  minimumParagraphs: number;
+  minimumInternalLinks: number;
+  minimumArticleImages: number;
+  minimumJsonLdScripts: number;
+  minimumUsefulSectionCharacters: number;
+  maxThinSections: number;
   minimumFaqDetails: number;
   maxHumanizerSlopHits: number;
   maxDuplicateHeadingOccurrences: number;
+  maxDuplicateParagraphOccurrences: number;
+  titleMinCharacters: number;
+  titleMaxCharacters: number;
+  metaDescriptionMinCharacters: number;
+  metaDescriptionMaxCharacters: number;
+  forbiddenGenericHeadings: string[];
   requiredHtmlMarkers: string[];
   forbiddenHtmlMarkers: string[];
   humanizerSlopMarkers: string[];
@@ -506,9 +520,29 @@ function loadQualityHardGates(): {
   const fallback = {
     minimumFinalHtmlCharacters: 12000,
     minimumContentHeadingsH2H3: 8,
+    minimumH2: 7,
+    minimumH3: 3,
+    minimumParagraphs: 24,
+    minimumInternalLinks: 4,
+    minimumArticleImages: 1,
+    minimumJsonLdScripts: 1,
+    minimumUsefulSectionCharacters: 180,
+    maxThinSections: 1,
     minimumFaqDetails: 5,
     maxHumanizerSlopHits: 3,
     maxDuplicateHeadingOccurrences: 1,
+    maxDuplicateParagraphOccurrences: 1,
+    titleMinCharacters: 45,
+    titleMaxCharacters: 120,
+    metaDescriptionMinCharacters: 90,
+    metaDescriptionMaxCharacters: 170,
+    forbiddenGenericHeadings: [
+      "Практический нюанс внедрения",
+      "Важный нюанс",
+      "Дополнительный блок",
+      "Полезная информация",
+      "Что важно знать",
+    ],
     requiredHtmlMarkers: [
       "article-table-scroll",
       "wp-block-table",
@@ -541,6 +575,26 @@ function loadQualityHardGates(): {
       { id: "geo-ai-search-optimizer", required: true, artifactField: "geoAiSearchOptimizerPassed" },
       { id: "russian-humanizer", required: true, artifactField: "russianHumanizerPassed" },
       { id: "media-director", required: true, artifactField: "mediaDirectorPassed" },
+      {
+        id: "keyword-topic-uniqueness-guardian",
+        required: true,
+        artifactField: "keywordTopicUniquenessGuardianPassed",
+      },
+      {
+        id: "mayai-structure-guardian",
+        required: true,
+        artifactField: "mayaiStructureGuardianPassed",
+      },
+      {
+        id: "html-semantics-guardian",
+        required: true,
+        artifactField: "htmlSemanticsGuardianPassed",
+      },
+      {
+        id: "meta-media-guardian",
+        required: true,
+        artifactField: "metaMediaGuardianPassed",
+      },
       { id: "content-structure-director", required: true, artifactField: "contentStructureDirectorPassed" },
     ],
   };
@@ -558,6 +612,24 @@ function loadQualityHardGates(): {
       minimumContentHeadingsH2H3:
         Number(cfg.hardGates?.minimumContentHeadingsH2H3) ||
         fallback.minimumContentHeadingsH2H3,
+      minimumH2: Number(cfg.hardGates?.minimumH2) || fallback.minimumH2,
+      minimumH3: Number(cfg.hardGates?.minimumH3) || fallback.minimumH3,
+      minimumParagraphs:
+        Number(cfg.hardGates?.minimumParagraphs) || fallback.minimumParagraphs,
+      minimumInternalLinks:
+        Number(cfg.hardGates?.minimumInternalLinks) ||
+        fallback.minimumInternalLinks,
+      minimumArticleImages:
+        Number(cfg.hardGates?.minimumArticleImages) ||
+        fallback.minimumArticleImages,
+      minimumJsonLdScripts:
+        Number(cfg.hardGates?.minimumJsonLdScripts) ||
+        fallback.minimumJsonLdScripts,
+      minimumUsefulSectionCharacters:
+        Number(cfg.hardGates?.minimumUsefulSectionCharacters) ||
+        fallback.minimumUsefulSectionCharacters,
+      maxThinSections:
+        Number(cfg.hardGates?.maxThinSections) || fallback.maxThinSections,
       minimumFaqDetails:
         Number(cfg.hardGates?.minimumFaqDetails) || fallback.minimumFaqDetails,
       maxHumanizerSlopHits:
@@ -566,6 +638,21 @@ function loadQualityHardGates(): {
       maxDuplicateHeadingOccurrences:
         Number(cfg.hardGates?.maxDuplicateHeadingOccurrences) ||
         fallback.maxDuplicateHeadingOccurrences,
+      maxDuplicateParagraphOccurrences:
+        Number(cfg.hardGates?.maxDuplicateParagraphOccurrences) ||
+        fallback.maxDuplicateParagraphOccurrences,
+      titleMinCharacters:
+        Number(cfg.hardGates?.titleMinCharacters) || fallback.titleMinCharacters,
+      titleMaxCharacters:
+        Number(cfg.hardGates?.titleMaxCharacters) || fallback.titleMaxCharacters,
+      metaDescriptionMinCharacters:
+        Number(cfg.hardGates?.metaDescriptionMinCharacters) ||
+        fallback.metaDescriptionMinCharacters,
+      metaDescriptionMaxCharacters:
+        Number(cfg.hardGates?.metaDescriptionMaxCharacters) ||
+        fallback.metaDescriptionMaxCharacters,
+      forbiddenGenericHeadings:
+        cfg.hardGates?.forbiddenGenericHeadings ?? fallback.forbiddenGenericHeadings,
       requiredHtmlMarkers:
         cfg.hardGates?.requiredHtmlMarkers ?? fallback.requiredHtmlMarkers,
       forbiddenHtmlMarkers:
@@ -610,10 +697,96 @@ function duplicateHeadings(html: string): Array<{ heading: string; count: number
     .map(([heading, count]) => ({ heading, count }));
 }
 
+function extractBlocks(html: string, tag: string): string[] {
+  const out: string[] = [];
+  const re = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "gi");
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(html)) !== null) out.push(match[1] ?? "");
+  return out;
+}
+
+function duplicateParagraphs(html: string): Array<{ paragraph: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const raw of extractBlocks(html, "p")) {
+    const paragraph = stripHtmlTags(raw)
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+    if (paragraph.length < 90) continue;
+    counts.set(paragraph, (counts.get(paragraph) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([paragraph, count]) => ({ paragraph: paragraph.slice(0, 180), count }));
+}
+
+function thinSections(html: string, minChars: number): Array<{ heading: string; chars: number }> {
+  const out: Array<{ heading: string; chars: number }> = [];
+  const re = /<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>([\s\S]*?)(?=<h[23]\b|$)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(html)) !== null) {
+    const heading = normalizeHeading(match[1] ?? "");
+    const chars = stripHtmlTags(match[2] ?? "").length;
+    if (heading && chars < minChars) out.push({ heading, chars });
+  }
+  return out;
+}
+
+function imageIssues(html: string): Array<Record<string, unknown>> {
+  const issues: Array<Record<string, unknown>> = [];
+  const re = /<img\b([^>]*?)>/gi;
+  let match: RegExpExecArray | null;
+  let index = 0;
+  while ((match = re.exec(html)) !== null) {
+    index += 1;
+    const attrs = match[1] ?? "";
+    const src = attrs.match(/\bsrc\s*=\s*["']([^"']+)["']/i)?.[1]?.trim() ?? "";
+    const alt = attrs.match(/\balt\s*=\s*["']([^"']*)["']/i)?.[1]?.trim() ?? "";
+    if (!/^https?:\/\//i.test(src)) issues.push({ index, code: "image_missing_http_src" });
+    if (!alt || alt.length < 12) issues.push({ index, code: "image_missing_useful_alt" });
+  }
+  return issues;
+}
+
+function normalizedTokenSet(text: string): Set<string> {
+  return new Set(
+    stripHtmlTags(text)
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 4),
+  );
+}
+
+function keywordCoverageOk(state: SavedState, html: string): boolean {
+  const source = [state.seeds?.k1, state.seeds?.k2, state.seeds?.k3, state.wordstatSynth]
+    .filter(Boolean)
+    .join(" ");
+  const sourceTokens = [...normalizedTokenSet(source)].filter(
+    (token) => !["wordpress", "wordprais"].includes(token),
+  );
+  if (sourceTokens.length === 0) return true;
+  const titleAndHtml = normalizedTokenSet(`${state.seoTitle ?? ""} ${html}`);
+  const covered = sourceTokens.filter((token) => titleAndHtml.has(token)).length;
+  return covered >= Math.min(2, sourceTokens.length);
+}
+
+function metaOk(meta: string | undefined, min: number, max: number): boolean {
+  const text = stripHtmlTags(meta ?? "").replace(/\s+/g, " ").trim();
+  return text.length >= min && text.length <= max && !/NEEDS_REWRITE|Lorem ipsum/i.test(text);
+}
+
 function computeQualityGates(html: string, state: SavedState): Record<string, boolean> {
   const hard = loadQualityHardGates();
   const text = stripHtmlTags(html);
   const h2h3 = countRegex(html, /<h[23]\b/gi);
+  const h2 = countRegex(html, /<h2\b/gi);
+  const h3 = countRegex(html, /<h3\b/gi);
+  const paragraphs = countRegex(html, /<p\b/gi);
+  const internalLinks = countRegex(html, /<a\b[^>]+href=["']https?:\/\/wordprais\.ru\//gi);
+  const images = countRegex(html, /<img\b/gi);
+  const jsonLd = countRegex(html, /<script\b[^>]+application\/ld\+json/gi);
   const details = countRegex(html, /<details\b/gi);
   const hasRequiredMarkers = hasAllMarkers(html, hard.requiredHtmlMarkers);
   const hasForbiddenMarkers = hard.forbiddenHtmlMarkers.some((marker) =>
@@ -630,6 +803,35 @@ function computeQualityGates(html: string, state: SavedState): Record<string, bo
       html.includes("article-banner"),
   );
   const slopHits = humanizerSlopHits(text, hard.humanizerSlopMarkers);
+  const titleLength = stripHtmlTags(state.seoTitle ?? "").length;
+  const titleOk =
+    titleLength >= hard.titleMinCharacters && titleLength <= hard.titleMaxCharacters;
+  const metaDescriptionOk = metaOk(
+    state.metaDescription,
+    hard.metaDescriptionMinCharacters,
+    hard.metaDescriptionMaxCharacters,
+  );
+  const duplicateParagraphsOk = duplicateParagraphs(html).every(
+    (item) => item.count <= hard.maxDuplicateParagraphOccurrences,
+  );
+  const noGenericHeadings = hard.forbiddenGenericHeadings.every((generic) => {
+    const needle = normalizeHeading(generic);
+    return !duplicateHeadings(`<h2>${generic}</h2>${html}`).some(
+      (item) => item.heading === needle || item.heading.includes(needle),
+    );
+  });
+  const semanticBlocksOk =
+    h2 >= hard.minimumH2 &&
+    h3 >= hard.minimumH3 &&
+    paragraphs >= hard.minimumParagraphs &&
+    internalLinks >= hard.minimumInternalLinks &&
+    images >= hard.minimumArticleImages &&
+    jsonLd >= hard.minimumJsonLdScripts &&
+    thinSections(html, hard.minimumUsefulSectionCharacters).length <= hard.maxThinSections &&
+    imageIssues(html).length === 0 &&
+    duplicateParagraphsOk &&
+    noGenericHeadings &&
+    keywordCoverageOk(state, html);
   const depthOk =
     text.length >= hard.minimumFinalHtmlCharacters &&
     h2h3 >= hard.minimumContentHeadingsH2H3;
@@ -641,17 +843,22 @@ function computeQualityGates(html: string, state: SavedState): Record<string, bo
     !hasForbiddenMarkers &&
     !/<h1\b/i.test(html) &&
     tableOk &&
+    semanticBlocksOk &&
     duplicateHeadings(html).every(
       (item) => item.count <= hard.maxDuplicateHeadingOccurrences,
     );
 
   return {
-    seoContentWriterPassed: Boolean(state.seoTitle) && depthOk && tableOk,
+    seoContentWriterPassed: Boolean(state.seoTitle) && titleOk && depthOk && tableOk,
     geoAiSearchOptimizerPassed: faqOk && tableOk && hasRequiredMarkers,
     russianHumanizerPassed:
       !hasForbiddenMarkers && slopHits.length <= hard.maxHumanizerSlopHits,
     mediaDirectorPassed: mediaOk,
     contentStructureDirectorPassed: htmlStructureOk && mediaOk,
+    htmlSemanticsGuardianPassed: semanticBlocksOk,
+    metaMediaGuardianPassed: titleOk && metaDescriptionOk && mediaOk,
+    keywordTopicUniquenessGuardianPassed: keywordCoverageOk(state, html),
+    mayaiStructureGuardianPassed: htmlStructureOk && semanticBlocksOk,
   };
 }
 
@@ -662,6 +869,12 @@ function articleQualityFindings(
   const hard = loadQualityHardGates();
   const text = stripHtmlTags(html);
   const h2h3 = countRegex(html, /<h[23]\b/gi);
+  const h2 = countRegex(html, /<h2\b/gi);
+  const h3 = countRegex(html, /<h3\b/gi);
+  const paragraphs = countRegex(html, /<p\b/gi);
+  const internalLinks = countRegex(html, /<a\b[^>]+href=["']https?:\/\/wordprais\.ru\//gi);
+  const images = countRegex(html, /<img\b/gi);
+  const jsonLd = countRegex(html, /<script\b[^>]+application\/ld\+json/gi);
   const details = countRegex(html, /<details\b/gi);
   const findings: Array<Record<string, unknown>> = [];
 
@@ -679,6 +892,16 @@ function articleQualityFindings(
       expected: `>=${hard.minimumContentHeadingsH2H3}`,
     });
   }
+  if (h2 < hard.minimumH2) findings.push({ code: "not_enough_h2", actual: h2, expected: `>=${hard.minimumH2}` });
+  if (h3 < hard.minimumH3) findings.push({ code: "not_enough_h3", actual: h3, expected: `>=${hard.minimumH3}` });
+  if (paragraphs < hard.minimumParagraphs)
+    findings.push({ code: "not_enough_paragraphs", actual: paragraphs, expected: `>=${hard.minimumParagraphs}` });
+  if (internalLinks < hard.minimumInternalLinks)
+    findings.push({ code: "not_enough_internal_links", actual: internalLinks, expected: `>=${hard.minimumInternalLinks}` });
+  if (images < hard.minimumArticleImages)
+    findings.push({ code: "missing_article_images", actual: images, expected: `>=${hard.minimumArticleImages}` });
+  if (jsonLd < hard.minimumJsonLdScripts)
+    findings.push({ code: "missing_schema_json_ld", actual: jsonLd, expected: `>=${hard.minimumJsonLdScripts}` });
   if (/<h1\b/i.test(html)) findings.push({ code: "h1_inside_post_body" });
   for (const marker of hard.requiredHtmlMarkers) {
     if (!html.includes(marker)) findings.push({ code: "missing_html_marker", marker });
@@ -693,6 +916,57 @@ function articleQualityFindings(
       });
     }
   }
+  for (const item of duplicateParagraphs(html)) {
+    if (item.count > hard.maxDuplicateParagraphOccurrences) {
+      findings.push({
+        code: "duplicate_paragraph",
+        paragraph: item.paragraph,
+        actual: item.count,
+        expected: `<=${hard.maxDuplicateParagraphOccurrences}`,
+      });
+    }
+  }
+  const thin = thinSections(html, hard.minimumUsefulSectionCharacters);
+  if (thin.length > hard.maxThinSections) {
+    findings.push({
+      code: "too_many_thin_sections",
+      actual: thin.length,
+      expected: `<=${hard.maxThinSections}`,
+      examples: thin.slice(0, 5),
+    });
+  }
+  for (const generic of hard.forbiddenGenericHeadings) {
+    const needle = normalizeHeading(generic);
+    const hasGeneric = extractBlocks(html, "h2")
+      .concat(extractBlocks(html, "h3"))
+      .map(normalizeHeading)
+      .some((heading) => heading === needle || heading.includes(needle));
+    if (hasGeneric) findings.push({ code: "generic_heading_forbidden", heading: generic });
+  }
+  for (const issue of imageIssues(html)) findings.push(issue);
+  const titleLength = stripHtmlTags(state.seoTitle ?? "").length;
+  if (titleLength < hard.titleMinCharacters || titleLength > hard.titleMaxCharacters) {
+    findings.push({
+      code: "invalid_seo_title_length",
+      actual: titleLength,
+      expected: `${hard.titleMinCharacters}-${hard.titleMaxCharacters}`,
+    });
+  }
+  if (
+    state.metaDescription &&
+    !metaOk(
+      state.metaDescription,
+      hard.metaDescriptionMinCharacters,
+      hard.metaDescriptionMaxCharacters,
+    )
+  ) {
+    findings.push({
+      code: "invalid_meta_description",
+      actual: stripHtmlTags(state.metaDescription).length,
+      expected: `${hard.metaDescriptionMinCharacters}-${hard.metaDescriptionMaxCharacters}`,
+    });
+  }
+  if (!keywordCoverageOk(state, html)) findings.push({ code: "primary_keyword_not_covered" });
   if (details < hard.minimumFaqDetails)
     findings.push({
       code: "faq_details_too_few",
@@ -973,6 +1247,12 @@ interface SavedState {
   seoContentWriterPassed?: boolean;
   russianHumanizerPassed?: boolean;
   contentStructureDirectorPassed?: boolean;
+  geoAiSearchOptimizerPassed?: boolean;
+  mediaDirectorPassed?: boolean;
+  htmlSemanticsGuardianPassed?: boolean;
+  metaMediaGuardianPassed?: boolean;
+  keywordTopicUniquenessGuardianPassed?: boolean;
+  mayaiStructureGuardianPassed?: boolean;
   keywordStatus?: "pending" | "published" | "failed";
   publishBlocked?: boolean;
   midArticleBannerSrcUrl?: string;
@@ -1207,6 +1487,11 @@ Strict publication gates:
 - Run seo-content-writer before the draft.
 - Run russian-humanizer after the draft.
 - Then act as content-structure-director and reject weak output yourself.
+- Then act as mayai-structure-guardian, html-semantics-guardian, keyword-topic-uniqueness-guardian, and meta-media-guardian before returning final HTML.
+- Mayai-like guide structure is mandatory: direct answer in the intro, article-toc, at least one JSON-LD script, one useful comparison/decision table, practical sections with enough detail, internal links to wordprais.ru, resources, FAQ and next steps.
+- Do not repeat paragraphs, do not pad with cloned filler blocks, and do not use generic headings such as "Практический нюанс внедрения".
+- Every image must have an http(s) src and useful Russian alt text. The article-banner image must be visible and relevant.
+- The article must stay tightly tied to the selected Wordstat keyword/topic, while title and angle remain unique against prior posts.
 - Return only final HTML with no html/body and no markdown.
 - Final HTML must contain >=12000 useful text characters, >=8 meaningful H2/H3, article-table-scroll + wp-block-table with inline borders/padding/caption/scope, article-banner, >=5 FAQ <details>, useful resources, and next steps.
 - Every H2/H3 heading must be unique. Never repeat generic headings like "Практический нюанс внедрения"; use specific headings tied to the current section.
@@ -1219,9 +1504,24 @@ Strict publication gates:
   );
 
   /** 43 мета — дискрипшен */
+  let metaPrompt = stripBlueprintHeader(loadMdByModule(43));
+  metaPrompt = metaPrompt.replace(/\{\{42\.content\}\}/g, state.articleHtml);
+  state.metaDescription = await cursorCloud(
+    metaPrompt,
+    "43 meta description Яндекс 100–140",
+  );
+
+  /** 44 — JSON описания аплоада обложки поста как в blueprint */
   state.qualityGates = computeQualityGates(state.articleHtml, state);
   state.seoContentWriterPassed = state.qualityGates.seoContentWriterPassed;
+  state.geoAiSearchOptimizerPassed = state.qualityGates.geoAiSearchOptimizerPassed;
   state.russianHumanizerPassed = state.qualityGates.russianHumanizerPassed;
+  state.mediaDirectorPassed = state.qualityGates.mediaDirectorPassed;
+  state.htmlSemanticsGuardianPassed = state.qualityGates.htmlSemanticsGuardianPassed;
+  state.metaMediaGuardianPassed = state.qualityGates.metaMediaGuardianPassed;
+  state.keywordTopicUniquenessGuardianPassed =
+    state.qualityGates.keywordTopicUniquenessGuardianPassed;
+  state.mayaiStructureGuardianPassed = state.qualityGates.mayaiStructureGuardianPassed;
   state.contentStructureDirectorPassed =
     state.qualityGates.contentStructureDirectorPassed;
   const qualityFindings = articleQualityFindings(state.articleHtml, state);
@@ -1231,14 +1531,6 @@ Strict publication gates:
     return;
   }
 
-  let metaPrompt = stripBlueprintHeader(loadMdByModule(43));
-  metaPrompt = metaPrompt.replace(/\{\{42\.content\}\}/g, state.articleHtml);
-  state.metaDescription = await cursorCloud(
-    metaPrompt,
-    "43 meta description Яндекс 100–140",
-  );
-
-  /** 44 — JSON описания аплоада обложки поста как в blueprint */
   let imgJsonPrompt = stripBlueprintHeader(loadMdByModule(44));
   imgJsonPrompt = imgJsonPrompt.replace(/\{\{40\.content\}\}/g, state.seoTitle);
   const imgAns = await cursorCloud(

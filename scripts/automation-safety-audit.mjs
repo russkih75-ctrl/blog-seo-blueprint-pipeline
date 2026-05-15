@@ -36,6 +36,10 @@ const requiredScripts = [
 const requiredSubagents = [
   "queue-keyword-guardian",
   "duplicate-title-meta-guardian",
+  "keyword-topic-uniqueness-guardian",
+  "mayai-structure-guardian",
+  "html-semantics-guardian",
+  "meta-media-guardian",
   "seo-content-writer",
   "geo-ai-search-optimizer",
   "russian-humanizer",
@@ -102,10 +106,25 @@ const findings = [
   check(
     publish.includes("forbidden_html_marker") &&
       publish.includes("humanizer_slop_markers_too_many") &&
-      publish.includes("duplicate_h2_h3_heading"),
+      publish.includes("duplicate_h2_h3_heading") &&
+      publish.includes("duplicate_paragraph") &&
+      publish.includes("missing_schema_json_ld") &&
+      publish.includes("invalid_meta_description") &&
+      publish.includes("image_missing_useful_alt") &&
+      publish.includes("primary_keyword_not_covered"),
     "publish_script_missing_secondary_quality_gates",
     "blocker",
     "scripts/wp-publish-streamable.mjs",
+  ),
+  check(
+    cloud.includes("duplicate_paragraph") &&
+      cloud.includes("missing_schema_json_ld") &&
+      cloud.includes("invalid_meta_description") &&
+      cloud.includes("image_missing_useful_alt") &&
+      cloud.includes("primary_keyword_not_covered"),
+    "cloud_missing_deep_prepublication_gates",
+    "blocker",
+    "Expected duplicate paragraph, schema, meta, image alt, and keyword coverage gates.",
   ),
   check(
     cloud.includes("duplicate_h2_h3_heading") &&
