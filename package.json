@@ -32,7 +32,8 @@
     "wp:delete-post": "node scripts/wp-delete-post-streamable.mjs",
     "wp:wordstat-queue-next": "node scripts/wp-wordstat-queue-next.mjs",
     "install:yadryshko-subagent": "node scripts/install-yadryshko-subagent.mjs",
-    "mcp:tools-check": "node scripts/mcp-sse-tools-check.mjs"
+    "mcp:tools-check": "node scripts/mcp-sse-tools-check.mjs",
+    "automation:audit": "node scripts/automation-safety-audit.mjs"
   },
   "dependencies": {
     "@cursor/sdk": "^1.0.12",

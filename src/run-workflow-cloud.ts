@@ -495,11 +495,18 @@ function countRegex(text: string, pattern: RegExp): number {
 function loadQualityHardGates(): {
   minimumFinalHtmlCharacters: number;
   minimumContentHeadingsH2H3: number;
+  minimumFaqDetails: number;
+  maxHumanizerSlopHits: number;
   requiredHtmlMarkers: string[];
+  forbiddenHtmlMarkers: string[];
+  humanizerSlopMarkers: string[];
+  requiredStages: Array<{ id: string; required?: boolean; artifactField?: string }>;
 } {
   const fallback = {
     minimumFinalHtmlCharacters: 12000,
     minimumContentHeadingsH2H3: 8,
+    minimumFaqDetails: 5,
+    maxHumanizerSlopHits: 3,
     requiredHtmlMarkers: [
       "article-table-scroll",
       "wp-block-table",
@@ -507,12 +514,38 @@ function loadQualityHardGates(): {
       "article-banner",
       "<details",
     ],
+    forbiddenHtmlMarkers: [
+      "NEEDS_REWRITE",
+      "Lorem ipsum",
+      "Страница не найдена",
+      "Oops",
+      "error-404",
+    ],
+    humanizerSlopMarkers: [
+      "важно отметить",
+      "следует отметить",
+      "в современном мире",
+      "в условиях стремительного",
+      "таким образом",
+      "данная статья",
+      "не только, но и",
+      "уникальный",
+      "революционный",
+    ],
+    requiredStages: [
+      { id: "seo-content-writer", required: true, artifactField: "seoContentWriterPassed" },
+      { id: "geo-ai-search-optimizer", required: true, artifactField: "geoAiSearchOptimizerPassed" },
+      { id: "russian-humanizer", required: true, artifactField: "russianHumanizerPassed" },
+      { id: "media-director", required: true, artifactField: "mediaDirectorPassed" },
+      { id: "content-structure-director", required: true, artifactField: "contentStructureDirectorPassed" },
+    ],
   };
   const p = path.join(ROOT, "config", "agent-orchestration.json");
   try {
     if (!existsSync(p)) return fallback;
     const cfg = JSON.parse(readFileSync(p, "utf-8")) as {
       hardGates?: Partial<typeof fallback>;
+      requiredStages?: typeof fallback.requiredStages;
     };
     return {
       minimumFinalHtmlCharacters:
@@ -521,12 +554,73 @@ function loadQualityHardGates(): {
       minimumContentHeadingsH2H3:
         Number(cfg.hardGates?.minimumContentHeadingsH2H3) ||
         fallback.minimumContentHeadingsH2H3,
+      minimumFaqDetails:
+        Number(cfg.hardGates?.minimumFaqDetails) || fallback.minimumFaqDetails,
+      maxHumanizerSlopHits:
+        Number(cfg.hardGates?.maxHumanizerSlopHits) ||
+        fallback.maxHumanizerSlopHits,
       requiredHtmlMarkers:
         cfg.hardGates?.requiredHtmlMarkers ?? fallback.requiredHtmlMarkers,
+      forbiddenHtmlMarkers:
+        cfg.hardGates?.forbiddenHtmlMarkers ?? fallback.forbiddenHtmlMarkers,
+      humanizerSlopMarkers:
+        cfg.hardGates?.humanizerSlopMarkers ?? fallback.humanizerSlopMarkers,
+      requiredStages: cfg.requiredStages ?? fallback.requiredStages,
     };
   } catch {
     return fallback;
   }
+}
+
+function humanizerSlopHits(text: string, markers: readonly string[]): string[] {
+  const lower = text.toLowerCase();
+  return markers.filter((marker) => lower.includes(marker.toLowerCase()));
+}
+
+function hasAllMarkers(html: string, markers: readonly string[]): boolean {
+  return markers.every((marker) => html.includes(marker));
+}
+
+function computeQualityGates(html: string, state: SavedState): Record<string, boolean> {
+  const hard = loadQualityHardGates();
+  const text = stripHtmlTags(html);
+  const h2h3 = countRegex(html, /<h[23]\b/gi);
+  const details = countRegex(html, /<details\b/gi);
+  const hasRequiredMarkers = hasAllMarkers(html, hard.requiredHtmlMarkers);
+  const hasForbiddenMarkers = hard.forbiddenHtmlMarkers.some((marker) =>
+    html.toLowerCase().includes(marker.toLowerCase()),
+  );
+  const tableOk =
+    /border-collapse\s*:\s*collapse/i.test(html) &&
+    /padding\s*:\s*11px\s+14px/i.test(html);
+  const mediaOk = Boolean(
+    state.coverNanoPublicUrl?.startsWith("http") &&
+      state.bannerNanoPublicUrl?.startsWith("http") &&
+      (state.midArticleBannerSrcUrl?.startsWith("http") ||
+        state.bannerWordpressPublicUrl?.startsWith("http")) &&
+      html.includes("article-banner"),
+  );
+  const slopHits = humanizerSlopHits(text, hard.humanizerSlopMarkers);
+  const depthOk =
+    text.length >= hard.minimumFinalHtmlCharacters &&
+    h2h3 >= hard.minimumContentHeadingsH2H3;
+  const faqOk = details >= hard.minimumFaqDetails;
+  const htmlStructureOk =
+    depthOk &&
+    faqOk &&
+    hasRequiredMarkers &&
+    !hasForbiddenMarkers &&
+    !/<h1\b/i.test(html) &&
+    tableOk;
+
+  return {
+    seoContentWriterPassed: Boolean(state.seoTitle) && depthOk && tableOk,
+    geoAiSearchOptimizerPassed: faqOk && tableOk && hasRequiredMarkers,
+    russianHumanizerPassed:
+      !hasForbiddenMarkers && slopHits.length <= hard.maxHumanizerSlopHits,
+    mediaDirectorPassed: mediaOk,
+    contentStructureDirectorPassed: htmlStructureOk && mediaOk,
+  };
 }
 
 function articleQualityFindings(
@@ -557,23 +651,39 @@ function articleQualityFindings(
   for (const marker of hard.requiredHtmlMarkers) {
     if (!html.includes(marker)) findings.push({ code: "missing_html_marker", marker });
   }
-  if (details < 5)
-    findings.push({ code: "faq_details_too_few", actual: details, expected: ">=5" });
+  if (details < hard.minimumFaqDetails)
+    findings.push({
+      code: "faq_details_too_few",
+      actual: details,
+      expected: `>=${hard.minimumFaqDetails}`,
+    });
   if (!/border-collapse\s*:\s*collapse/i.test(html))
     findings.push({ code: "table_without_border_collapse" });
   if (!/padding\s*:\s*11px\s+14px/i.test(html))
     findings.push({ code: "table_without_required_cell_padding" });
+  for (const marker of hard.forbiddenHtmlMarkers) {
+    if (html.toLowerCase().includes(marker.toLowerCase()))
+      findings.push({ code: "forbidden_html_marker", marker });
+  }
+
+  const slopHits = humanizerSlopHits(text, hard.humanizerSlopMarkers);
+  if (slopHits.length > hard.maxHumanizerSlopHits) {
+    findings.push({
+      code: "humanizer_slop_markers_too_many",
+      actual: slopHits.length,
+      expected: `<=${hard.maxHumanizerSlopHits}`,
+      markers: slopHits,
+    });
+  }
 
   const quality = state.qualityGates ?? {};
-  if (quality.seoContentWriterPassed !== true && state.seoContentWriterPassed !== true)
-    findings.push({ code: "required_stage_missing", stage: "seo-content-writer" });
-  if (quality.russianHumanizerPassed !== true && state.russianHumanizerPassed !== true)
-    findings.push({ code: "required_stage_missing", stage: "russian-humanizer" });
-  if (
-    quality.contentStructureDirectorPassed !== true &&
-    state.contentStructureDirectorPassed !== true
-  ) {
-    findings.push({ code: "content_structure_director_missing" });
+  for (const stage of hard.requiredStages) {
+    if (!stage.required) continue;
+    const field = stage.artifactField;
+    if (!field) continue;
+    if (quality[field] !== true && state[field as keyof SavedState] !== true) {
+      findings.push({ code: "required_stage_missing", stage: stage.id, field });
+    }
   }
   return findings;
 }
@@ -588,6 +698,7 @@ function writeQualityActionRequired(
     reason: "publish_blocked_article_quality_gate",
     textCharacters: stripHtmlTags(state.articleHtml ?? "").length,
     h2h3Count: countRegex(state.articleHtml ?? "", /<h[23]\b/gi),
+    qualityGates: state.qualityGates ?? null,
     findings,
   };
   state.qualityResult = result;
@@ -1064,11 +1175,11 @@ Strict publication gates:
   );
 
   /** 43 мета — дискрипшен */
-  state.qualityGates = {
-    seoContentWriterPassed: true,
-    russianHumanizerPassed: true,
-    contentStructureDirectorPassed: true,
-  };
+  state.qualityGates = computeQualityGates(state.articleHtml, state);
+  state.seoContentWriterPassed = state.qualityGates.seoContentWriterPassed;
+  state.russianHumanizerPassed = state.qualityGates.russianHumanizerPassed;
+  state.contentStructureDirectorPassed =
+    state.qualityGates.contentStructureDirectorPassed;
   const qualityFindings = articleQualityFindings(state.articleHtml, state);
   if (qualityFindings.length > 0) {
     writeQualityActionRequired(state, qualityFindings);

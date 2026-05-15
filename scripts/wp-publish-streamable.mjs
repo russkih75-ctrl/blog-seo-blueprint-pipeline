@@ -163,6 +163,8 @@ function articleQualityFindings(html, state) {
   const hard = cfg.hardGates ?? {};
   const minChars = Number(hard.minimumFinalHtmlCharacters ?? 12000);
   const minHeadings = Number(hard.minimumContentHeadingsH2H3 ?? 8);
+  const minFaqDetails = Number(hard.minimumFaqDetails ?? 5);
+  const maxHumanizerSlopHits = Number(hard.maxHumanizerSlopHits ?? 3);
   const text = stripTags(html);
   const headings = countMatches(html, /<h[23]\b/gi);
   const details = countMatches(html, /<details\b/gi);
@@ -178,12 +180,29 @@ function articleQualityFindings(html, state) {
     if (!String(html).includes(marker))
       findings.push({ code: "missing_html_marker", marker, severity: "blocker" });
   }
-  if (details < 5)
-    findings.push({ code: "faq_details_too_few", severity: "blocker", actual: details, expected: ">=5" });
+  if (details < minFaqDetails)
+    findings.push({ code: "faq_details_too_few", severity: "blocker", actual: details, expected: `>=${minFaqDetails}` });
   if (!/border-collapse\s*:\s*collapse/i.test(html))
     findings.push({ code: "table_without_border_collapse", severity: "blocker" });
   if (!/padding\s*:\s*11px\s+14px/i.test(html))
     findings.push({ code: "table_without_required_cell_padding", severity: "blocker" });
+  for (const marker of hard.forbiddenHtmlMarkers ?? []) {
+    if (String(html).toLowerCase().includes(String(marker).toLowerCase())) {
+      findings.push({ code: "forbidden_html_marker", marker, severity: "blocker" });
+    }
+  }
+  const slopHits = (hard.humanizerSlopMarkers ?? []).filter((marker) =>
+    text.toLowerCase().includes(String(marker).toLowerCase()),
+  );
+  if (slopHits.length > maxHumanizerSlopHits) {
+    findings.push({
+      code: "humanizer_slop_markers_too_many",
+      severity: "blocker",
+      actual: slopHits.length,
+      expected: `<=${maxHumanizerSlopHits}`,
+      markers: slopHits,
+    });
+  }
 
   const quality = state.qualityGates ?? state.qa ?? {};
   for (const stage of cfg.requiredStages ?? []) {
