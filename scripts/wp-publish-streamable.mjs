@@ -476,6 +476,12 @@ function parseMediaPublicUrl(fullText, parsedJson) {
   return m?.[1]?.replace(/["'")\];,]+$/u, "").trim();
 }
 
+/** Ответ wordpress_content_blob_append — извлечь blob_id */
+function parseBlobIdFromAppend(text) {
+  const m = String(text ?? "").match(/\bblob_id\s*:\s*(\S+)/iu);
+  return m ? m[1].trim() : undefined;
+}
+
 async function resolvePermalink(client, postId, title, postType) {
   const res = await client.callTool(
     {
@@ -730,23 +736,96 @@ async function main() {
       : html;
   if (htmlForPublish !== html) state.articleHtml = htmlForPublish;
 
-  const createArgs = {
-    title,
-    content: htmlForPublish,
-    excerpt: (state.metaDescription ?? "").slice(0, 500),
-    status: publishStatus,
-    post_type: postType,
-    ...(typeof coverMedia.id === "number" ? { featured_media: coverMedia.id } : {}),
-  };
-
-  const created = await client.callTool(
-    {
-      name: "wordpress_create_post",
-      arguments: createArgs,
-    },
-    undefined,
-    { timeout: reqTimeoutMs },
-  );
+  const excerpt = (state.metaDescription ?? "").slice(0, 500);
+  const blobHalvesPath = process.env.WP_BLOB_HALVES_JSON?.trim();
+  let created;
+  if (blobHalvesPath && existsSync(blobHalvesPath)) {
+    const halves = JSON.parse(readFileSync(blobHalvesPath, "utf-8"));
+    const h1Path = path.resolve(ROOT, String(halves.half1 ?? ""));
+    const h2Path = path.resolve(ROOT, String(halves.half2 ?? ""));
+    const chunk1 = readFileSync(h1Path, "utf-8");
+    const chunk2 = readFileSync(h2Path, "utf-8");
+    if (chunk1 + chunk2 !== htmlForPublish) {
+      await client.close();
+      console.error(
+        JSON.stringify({
+          ok: false,
+          error: "WP_BLOB_HALVES_JSON_concat_mismatch",
+          hint: "half1+half2 must equal article HTML after banner URL substitution",
+        }),
+      );
+      process.exitCode = 5;
+      return;
+    }
+    const append1 = await client.callTool(
+      {
+        name: "wordpress_content_blob_append",
+        arguments: { reset: true, chunk: chunk1, finalize: false },
+      },
+      undefined,
+      { timeout: reqTimeoutMs },
+    );
+    const t1 = toolPayloadText(append1);
+    const blobId = parseBlobIdFromAppend(t1);
+    if (!blobId) {
+      await client.close();
+      console.error(
+        JSON.stringify({
+          ok: false,
+          error: "wordpress_content_blob_append_missing_blob_id",
+          snippet: t1.slice(0, 800),
+        }),
+      );
+      process.exitCode = 5;
+      return;
+    }
+    const append2 = await client.callTool(
+      {
+        name: "wordpress_content_blob_append",
+        arguments: { blob_id: blobId, chunk: chunk2, finalize: true },
+      },
+      undefined,
+      { timeout: reqTimeoutMs },
+    );
+    const t2 = toolPayloadText(append2);
+    if (!/sha256|финализ|finalize/i.test(t2)) {
+      console.warn(
+        `[wp-publish-streamable] blob finalize: unexpected response (first 400 chars): ${t2.slice(0, 400)}`,
+      );
+    }
+    created = await client.callTool(
+      {
+        name: "wordpress_create_post_from_blob",
+        arguments: {
+          blob_id: blobId,
+          title,
+          excerpt,
+          status: publishStatus,
+          post_type: postType,
+          ...(typeof coverMedia.id === "number" ? { featured_media: coverMedia.id } : {}),
+        },
+      },
+      undefined,
+      { timeout: reqTimeoutMs },
+    );
+  } else {
+    const createArgs = {
+      title,
+      content: htmlForPublish,
+      excerpt,
+      status: publishStatus,
+      post_type: postType,
+      ...(typeof coverMedia.id === "number" ? { featured_media: coverMedia.id } : {}),
+    };
+    created = await client.callTool(
+      {
+        name: "wordpress_create_post",
+        arguments: createArgs,
+      },
+      undefined,
+      { timeout: reqTimeoutMs },
+    );
+  }
 
   const rawText = toolPayloadText(created);
   let parsedPost;
