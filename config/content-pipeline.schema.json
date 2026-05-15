@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "content-pipeline-placeholder",
+  "type": "object",
+  "additionalProperties": true,
+  "description": "Заглушка схемы для content:check; реальная валидация handoff выполняется агентом."
+}
