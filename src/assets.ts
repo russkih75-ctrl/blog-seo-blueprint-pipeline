@@ -1,12 +1,10 @@
-/** Дефолтный баннер в теле статьи (нейтральный сток, без привязки к доменам заказчика) */
+/** No stock fallback for publish: generated + uploaded media is required. */
 export const DEFAULT_BANNER_IN_ARTICLE =
-  "https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?w=1600&q=80";
+  "";
 
 /** Референсы для Nano при отсутствии пользовательских изображений — нейтральные стоки */
 export const DEFAULT_NANO_REFERENCE_IMAGE_URLS: readonly string[] = [
-  "https://images.unsplash.com/photo-1547658719-da9b46aea9e8?w=1200&q=80",
-  "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&q=80",
-  "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1200&q=80",
+  "http://bytmaster34.ru/wp-content/uploads/2026/05/1776706200543-lxk48gqcs3c-224x300.jpg",
 ];
 
 /** Точные имена инструментов MCP KV (дескрипторы клиента Cursor) */

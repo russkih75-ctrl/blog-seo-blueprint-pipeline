@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "requiredSupervisor": {
+    "id": "content-structure-director",
+    "role": "Blocks publication unless the article matches the WordPrais mayai-like structure, useful depth, SEO/GEO/neuro-search coverage, media policy, and duplicate policy.",
+    "requiredBeforePublish": true,
+    "mustWriteArtifact": "qa-report.json"
+  },
+  "requiredStages": [
+    {
+      "id": "seo-content-writer",
+      "required": true,
+      "artifactField": "seoContentWriterPassed"
+    },
+    {
+      "id": "russian-humanizer",
+      "required": true,
+      "artifactField": "russianHumanizerPassed"
+    },
+    {
+      "id": "content-structure-director",
+      "required": true,
+      "artifactField": "contentStructureDirectorPassed"
+    }
+  ],
+  "hardGates": {
+    "minimumFinalHtmlCharacters": 12000,
+    "minimumContentHeadingsH2H3": 8,
+    "requiredHtmlMarkers": [
+      "article-table-scroll",
+      "wp-block-table",
+      "scope=\"col\"",
+      "article-banner",
+      "<details"
+    ],
+    "mediaRequiredForPublish": true,
+    "coverRequired": "16:9 WordPress media id and permanent URL",
+    "bannerRequired": "21:9 WordPress/media CDN URL inside article-banner"
+  },
+  "failurePolicy": {
+    "onStructureFail": "block_publish_keep_keyword_pending",
+    "onMediaFail": "block_publish_keep_keyword_pending",
+    "onDuplicateKeyword": "block_publish_keep_keyword_pending"
+  }
+}

@@ -19,9 +19,10 @@ if (mcpKvDotenvRel)
 
 /** Дефолтный баннер для скрипта публикации (нейтральный сток) */
 const DEFAULT_BANNER =
-  "https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?w=1600&q=80";
+  "";
 
 const reqTimeoutMs = Number(process.env.MCP_REQUEST_TIMEOUT_MS ?? "600000");
+const qualityConfigPath = path.join(ROOT, "config", "agent-orchestration.json");
 
 function envUrl() {
   return (
@@ -70,7 +71,157 @@ function extractPostId(text) {
   return undefined;
 }
 
+function shouldRequirePermanentMedia(status) {
+  return (
+    String(process.env.WP_REQUIRE_PERMANENT_MEDIA ?? "").toLowerCase() ===
+      "true" || status.toLowerCase() === "publish"
+  );
+}
+
+function isPermanentWordpressOrCdnUrl(raw) {
+  if (typeof raw !== "string" || !raw.trim()) return false;
+  let u;
+  try {
+    u = new URL(raw.trim());
+  } catch {
+    return false;
+  }
+  if (!/^https?:$/i.test(u.protocol)) return false;
+  const host = u.hostname.toLowerCase();
+  const pathname = u.pathname.toLowerCase();
+  if (
+    host === "localhost" ||
+    host.endsWith(".local") ||
+    host.includes("unsplash.com")
+  ) {
+    return false;
+  }
+  const envHosts = (process.env.PERMANENT_MEDIA_HOSTS || "")
+    .split(/[,;\s]+/)
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean);
+  if (envHosts.some((h) => host === h || host.endsWith(`.${h}`))) return true;
+  if (pathname.includes("/wp-content/uploads/")) return true;
+  return (
+    host.includes("cdn") ||
+    host.endsWith(".wp.com") ||
+    host.endsWith(".wordpress.com") ||
+    host.endsWith(".cloudfront.net") ||
+    host.endsWith(".cloudinary.com") ||
+    host.endsWith(".imgix.net") ||
+    host.endsWith(".b-cdn.net") ||
+    host.endsWith(".fastly.net")
+  );
+}
+
+function writeMediaActionRequired(statePath, state, details) {
+  const result = {
+    ok: false,
+    actionRequired: "generate_and_upload_cover_16_9_and_banner_21_9",
+    reason: "publish_blocked_missing_permanent_media",
+    ...details,
+  };
+  state.mediaResult = result;
+  state.keywordStatus = "pending";
+  state.publishBlocked = true;
+  mkdirSync(ART, { recursive: true });
+  writeFileSync(
+    path.join(ART, "media-result.json"),
+    JSON.stringify(result, null, 2),
+    "utf-8",
+  );
+  writeFileSync(statePath, JSON.stringify(state, null, 2), "utf-8");
+  return result;
+}
+
 /** Текстовые блоки инструмента → объект или строка */
+function stripTags(html) {
+  return String(html ?? "")
+    .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function countMatches(text, pattern) {
+  return (String(text ?? "").match(pattern) ?? []).length;
+}
+
+function loadQualityConfig() {
+  try {
+    if (!existsSync(qualityConfigPath)) return {};
+    return JSON.parse(readFileSync(qualityConfigPath, "utf-8"));
+  } catch {
+    return {};
+  }
+}
+
+function articleQualityFindings(html, state) {
+  const cfg = loadQualityConfig();
+  const hard = cfg.hardGates ?? {};
+  const minChars = Number(hard.minimumFinalHtmlCharacters ?? 12000);
+  const minHeadings = Number(hard.minimumContentHeadingsH2H3 ?? 8);
+  const text = stripTags(html);
+  const headings = countMatches(html, /<h[23]\b/gi);
+  const details = countMatches(html, /<details\b/gi);
+  const findings = [];
+
+  if (text.length < minChars)
+    findings.push({ code: "article_too_short", severity: "blocker", actual: text.length, expected: `>=${minChars}` });
+  if (headings < minHeadings)
+    findings.push({ code: "not_enough_h2_h3", severity: "blocker", actual: headings, expected: `>=${minHeadings}` });
+  if (/<h1\b/i.test(html))
+    findings.push({ code: "h1_inside_post_body", severity: "blocker" });
+  for (const marker of hard.requiredHtmlMarkers ?? []) {
+    if (!String(html).includes(marker))
+      findings.push({ code: "missing_html_marker", marker, severity: "blocker" });
+  }
+  if (details < 5)
+    findings.push({ code: "faq_details_too_few", severity: "blocker", actual: details, expected: ">=5" });
+  if (!/border-collapse\s*:\s*collapse/i.test(html))
+    findings.push({ code: "table_without_border_collapse", severity: "blocker" });
+  if (!/padding\s*:\s*11px\s+14px/i.test(html))
+    findings.push({ code: "table_without_required_cell_padding", severity: "blocker" });
+
+  const quality = state.qualityGates ?? state.qa ?? {};
+  for (const stage of cfg.requiredStages ?? []) {
+    if (!stage.required) continue;
+    const field = stage.artifactField;
+    if (field && quality[field] !== true && state[field] !== true) {
+      findings.push({ code: "required_stage_missing", stage: stage.id, field, severity: "blocker" });
+    }
+  }
+  if (state.contentStructureDirectorPassed !== true && quality.contentStructureDirectorPassed !== true) {
+    findings.push({ code: "content_structure_director_missing", severity: "blocker" });
+  }
+
+  return {
+    ok: findings.length === 0,
+    textCharacters: text.length,
+    h2h3Count: headings,
+    detailsCount: details,
+    findings,
+  };
+}
+
+function writeQualityActionRequired(statePath, state, quality) {
+  const result = {
+    ok: false,
+    actionRequired: "rewrite_article_with_content_structure_director",
+    reason: "publish_blocked_article_quality_gate",
+    ...quality,
+  };
+  state.qualityResult = result;
+  state.keywordStatus = "pending";
+  state.publishBlocked = true;
+  mkdirSync(ART, { recursive: true });
+  writeFileSync(path.join(ART, "qa-report.json"), JSON.stringify(result, null, 2), "utf-8");
+  writeFileSync(statePath, JSON.stringify(state, null, 2), "utf-8");
+  return result;
+}
+
 function toolPayloadText(result) {
   const texts =
     result.content
@@ -99,6 +250,24 @@ function parseMediaId(fullText, parsedJson) {
   return undefined;
 }
 
+function parseMediaPublicUrl(fullText, parsedJson) {
+  if (parsedJson && typeof parsedJson === "object") {
+    const url =
+      parsedJson.source_url ??
+      parsedJson.url ??
+      parsedJson.link ??
+      parsedJson.guid?.rendered ??
+      parsedJson.data?.source_url ??
+      parsedJson.media?.source_url;
+    if (typeof url === "string" && /^https?:\/\//i.test(url)) return url.trim();
+  }
+  const m =
+    fullText.match(/\b(?:URL|source_url|link)\s*[:=]\s*(https?:\/\/[^\s"'<>\][]+)/iu) ||
+    fullText.match(/"source_url"\s*:\s*"([^"]+)"/i) ||
+    fullText.match(/"url"\s*:\s*"([^"]+)"/i);
+  return m?.[1]?.replace(/["'")\];,]+$/u, "").trim();
+}
+
 async function resolvePermalink(client, postId, title, postType) {
   const res = await client.callTool(
     {
@@ -123,11 +292,11 @@ async function resolvePermalink(client, postId, title, postType) {
   return undefined;
 }
 
-async function uploadFeaturedFromUrl(client, url, title, excerpt) {
+async function uploadMediaFromUrl(client, url, fields) {
   const common = {
-    title: title.slice(0, 120),
-    alt_text: title.slice(0, 180),
-    caption: excerpt.slice(0, 300),
+    title: fields.title.slice(0, 120),
+    alt_text: fields.alt_text.slice(0, 180),
+    caption: fields.caption.slice(0, 300),
   };
   try {
     const up = await client.callTool(
@@ -146,7 +315,8 @@ async function uploadFeaturedFromUrl(client, url, title, excerpt) {
       parsed = undefined;
     }
     const id = parseMediaId(upText, parsed);
-    if (typeof id === "number") return id;
+    const publicUrl = parseMediaPublicUrl(upText, parsed);
+    if (typeof id === "number") return { id, publicUrl };
   } catch {
     /* fallback ниже */
   }
@@ -166,10 +336,40 @@ async function uploadFeaturedFromUrl(client, url, title, excerpt) {
     } catch {
       parsed2 = undefined;
     }
-    return parseMediaId(upText2, parsed2);
+    return {
+      id: parseMediaId(upText2, parsed2),
+      publicUrl: parseMediaPublicUrl(upText2, parsed2),
+    };
   } catch {
     return undefined;
   }
+}
+
+async function uploadFeaturedFromUrl(client, url, title, excerpt) {
+  return uploadMediaFromUrl(client, url, {
+    title,
+    alt_text: title,
+    caption: excerpt,
+  });
+}
+
+function existingMedia(state, prefix) {
+  const id =
+    state[`${prefix}WordpressMediaId`] ??
+    state[`${prefix}WordPressMediaId`] ??
+    state[`${prefix}MediaId`];
+  const publicUrl =
+    state[`${prefix}WordpressPublicUrl`] ??
+    state[`${prefix}WordPressPublicUrl`];
+  return {
+    id:
+      typeof id === "number"
+        ? id
+        : typeof id === "string" && /^\d+$/.test(id)
+          ? Number(id)
+          : undefined,
+    publicUrl: typeof publicUrl === "string" ? publicUrl : undefined,
+  };
 }
 
 async function main() {
@@ -191,6 +391,13 @@ async function main() {
   if (!title || !html) {
     console.error(JSON.stringify({ ok: false, error: "missing_title_or_html" }));
     process.exit(1);
+  }
+
+  const quality = articleQualityFindings(html, state);
+  if (!quality.ok) {
+    const result = writeQualityActionRequired(statePath, state, quality);
+    console.error(JSON.stringify(result, null, 2));
+    process.exit(4);
   }
 
   const persistContentRunId = () => {
@@ -226,10 +433,12 @@ async function main() {
     (process.env.WP_POST_STATUS || "publish").trim() || "publish";
   const postType = (process.env.WP_POST_TYPE || "posts").trim() || "posts";
 
-  const featuredCandidate =
-    process.env.FEATURED_IMAGE_URL?.trim() ||
-    state.coverNanoPublicUrl ||
-    DEFAULT_BANNER;
+  const requirePermanentMedia = shouldRequirePermanentMedia(publishStatus);
+  const featuredCandidate = requirePermanentMedia
+    ? state.coverNanoPublicUrl
+    : process.env.FEATURED_IMAGE_URL?.trim() ||
+      state.coverNanoPublicUrl ||
+      DEFAULT_BANNER;
 
   const transport = new StreamableHTTPClientTransport(new URL(urlStr), {
     requestInit: { headers: bearerHeaders() },
@@ -238,27 +447,88 @@ async function main() {
 
   await client.connect(transport, { timeout: reqTimeoutMs });
 
-  let featuredMedia;
+  let coverMedia = existingMedia(state, "cover");
+  let bannerMedia = existingMedia(state, "banner");
+
   if (featuredCandidate?.startsWith("http")) {
     try {
-      featuredMedia = await uploadFeaturedFromUrl(
+      coverMedia = (await uploadFeaturedFromUrl(
         client,
         featuredCandidate,
         title,
         state.metaDescription ?? "",
-      );
+      )) ?? coverMedia;
+      if (typeof coverMedia.id === "number") state.coverWordpressMediaId = coverMedia.id;
+      if (coverMedia.publicUrl) state.coverWordpressPublicUrl = coverMedia.publicUrl;
     } catch {
-      featuredMedia = undefined;
+      coverMedia = existingMedia(state, "cover");
     }
   }
 
+  const bannerCandidate = state.bannerNanoPublicUrl;
+  if (bannerCandidate?.startsWith("http")) {
+    try {
+      bannerMedia = (await uploadMediaFromUrl(client, bannerCandidate, {
+        title: `${title} banner`,
+        alt_text: title,
+        caption: "",
+      })) ?? bannerMedia;
+      if (typeof bannerMedia.id === "number") state.bannerWordpressMediaId = bannerMedia.id;
+      if (bannerMedia.publicUrl) {
+        state.bannerWordpressPublicUrl = bannerMedia.publicUrl;
+        state.midArticleBannerSrcUrl = bannerMedia.publicUrl;
+      }
+    } catch {
+      bannerMedia = existingMedia(state, "banner");
+    }
+  }
+
+  if (requirePermanentMedia) {
+    const coverOk =
+      typeof coverMedia.id === "number" &&
+      isPermanentWordpressOrCdnUrl(coverMedia.publicUrl);
+    const bannerOk =
+      typeof bannerMedia.id === "number" &&
+      isPermanentWordpressOrCdnUrl(bannerMedia.publicUrl);
+    if (!coverOk || !bannerOk) {
+      await client.close();
+      const result = writeMediaActionRequired(statePath, state, {
+        missing: {
+          cover16x9: !coverOk,
+          banner21x9: !bannerOk,
+        },
+        cover: {
+          generatedUrl: state.coverNanoPublicUrl ?? null,
+          wordpressMediaId: coverMedia.id ?? null,
+          wordpressPublicUrl: coverMedia.publicUrl ?? null,
+        },
+        banner: {
+          generatedUrl: state.bannerNanoPublicUrl ?? null,
+          wordpressMediaId: bannerMedia.id ?? null,
+          wordpressPublicUrl: bannerMedia.publicUrl ?? null,
+        },
+        statePath: path.relative(ROOT, statePath),
+        mediaResultPath: path.relative(ROOT, path.join(ART, "media-result.json")),
+      });
+      console.error(JSON.stringify(result, null, 2));
+      process.exitCode = 3;
+      return;
+    }
+  }
+
+  const htmlForPublish =
+    bannerMedia.publicUrl && state.bannerNanoPublicUrl
+      ? html.replaceAll(state.bannerNanoPublicUrl, bannerMedia.publicUrl)
+      : html;
+  if (htmlForPublish !== html) state.articleHtml = htmlForPublish;
+
   const createArgs = {
     title,
-    content: html,
+    content: htmlForPublish,
     excerpt: (state.metaDescription ?? "").slice(0, 500),
     status: publishStatus,
     post_type: postType,
-    ...(typeof featuredMedia === "number" ? { featured_media: featuredMedia } : {}),
+    ...(typeof coverMedia.id === "number" ? { featured_media: coverMedia.id } : {}),
   };
 
   const created = await client.callTool(
@@ -318,7 +588,7 @@ async function main() {
         ok: Boolean(wordpressPublishedUrl),
         wordpressPublishedUrl: wordpressPublishedUrl ?? null,
         wordpressPostIdGuess: wordpressPostIdGuess ?? null,
-        featuredMediaId: featuredMedia ?? null,
+        featuredMediaId: coverMedia.id ?? null,
         statePath: path.relative(ROOT, statePath),
       },
       null,

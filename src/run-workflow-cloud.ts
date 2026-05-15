@@ -405,6 +405,203 @@ export function extractPublicImageUrlFromAgentText(answer: string): string | und
   return all[all.length - 1]?.replace(/[,;.]$/, "").trim();
 }
 
+function extractMediaIdFromAgentText(answer: string): number | undefined {
+  const m =
+    answer.match(/\bWP_MEDIA_ID\s*=\s*(\d+)/i) ||
+    answer.match(/\b(?:ID|media[_ ]?id)\s*[:=]\s*(\d+)/i) ||
+    answer.match(/"id"\s*:\s*(\d+)/i);
+  return m ? Number(m[1]) : undefined;
+}
+
+function shouldRequirePermanentMedia(status: string): boolean {
+  return (
+    String(process.env.WP_REQUIRE_PERMANENT_MEDIA ?? "").toLowerCase() ===
+      "true" || status.toLowerCase() === "publish"
+  );
+}
+
+function isPermanentWordpressOrCdnUrl(raw: string | undefined): boolean {
+  if (!raw) return false;
+  let u: URL;
+  try {
+    u = new URL(raw.trim());
+  } catch {
+    return false;
+  }
+  if (!/^https?:$/i.test(u.protocol)) return false;
+  const host = u.hostname.toLowerCase();
+  const pathname = u.pathname.toLowerCase();
+  if (
+    host === "localhost" ||
+    host.endsWith(".local") ||
+    host.includes("unsplash.com")
+  ) {
+    return false;
+  }
+  const envHosts = (process.env.PERMANENT_MEDIA_HOSTS || "")
+    .split(/[,;\s]+/)
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean);
+  if (envHosts.some((h) => host === h || host.endsWith(`.${h}`))) return true;
+  if (pathname.includes("/wp-content/uploads/")) return true;
+  return (
+    host.includes("cdn") ||
+    host.endsWith(".wp.com") ||
+    host.endsWith(".wordpress.com") ||
+    host.endsWith(".cloudfront.net") ||
+    host.endsWith(".cloudinary.com") ||
+    host.endsWith(".imgix.net") ||
+    host.endsWith(".b-cdn.net") ||
+    host.endsWith(".fastly.net")
+  );
+}
+
+function writeMediaActionRequired(
+  state: SavedState,
+  details: Record<string, unknown>,
+): void {
+  const result = {
+    ok: false,
+    actionRequired: "generate_and_upload_cover_16_9_and_banner_21_9",
+    reason: "publish_blocked_missing_permanent_media",
+    ...details,
+  };
+  state.mediaResult = result;
+  state.keywordStatus = "pending";
+  state.publishBlocked = true;
+  mkdirSync(ART, { recursive: true });
+  writeFileSync(
+    path.join(ART, "media-result.json"),
+    JSON.stringify(result, null, 2),
+    "utf-8",
+  );
+  saveState(state);
+}
+
+function stripHtmlTags(html: string): string {
+  return html
+    .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function countRegex(text: string, pattern: RegExp): number {
+  return text.match(pattern)?.length ?? 0;
+}
+
+function loadQualityHardGates(): {
+  minimumFinalHtmlCharacters: number;
+  minimumContentHeadingsH2H3: number;
+  requiredHtmlMarkers: string[];
+} {
+  const fallback = {
+    minimumFinalHtmlCharacters: 12000,
+    minimumContentHeadingsH2H3: 8,
+    requiredHtmlMarkers: [
+      "article-table-scroll",
+      "wp-block-table",
+      "scope=\"col\"",
+      "article-banner",
+      "<details",
+    ],
+  };
+  const p = path.join(ROOT, "config", "agent-orchestration.json");
+  try {
+    if (!existsSync(p)) return fallback;
+    const cfg = JSON.parse(readFileSync(p, "utf-8")) as {
+      hardGates?: Partial<typeof fallback>;
+    };
+    return {
+      minimumFinalHtmlCharacters:
+        Number(cfg.hardGates?.minimumFinalHtmlCharacters) ||
+        fallback.minimumFinalHtmlCharacters,
+      minimumContentHeadingsH2H3:
+        Number(cfg.hardGates?.minimumContentHeadingsH2H3) ||
+        fallback.minimumContentHeadingsH2H3,
+      requiredHtmlMarkers:
+        cfg.hardGates?.requiredHtmlMarkers ?? fallback.requiredHtmlMarkers,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function articleQualityFindings(
+  html: string,
+  state: SavedState,
+): Array<Record<string, unknown>> {
+  const hard = loadQualityHardGates();
+  const text = stripHtmlTags(html);
+  const h2h3 = countRegex(html, /<h[23]\b/gi);
+  const details = countRegex(html, /<details\b/gi);
+  const findings: Array<Record<string, unknown>> = [];
+
+  if (text.length < hard.minimumFinalHtmlCharacters) {
+    findings.push({
+      code: "article_too_short",
+      actual: text.length,
+      expected: `>=${hard.minimumFinalHtmlCharacters}`,
+    });
+  }
+  if (h2h3 < hard.minimumContentHeadingsH2H3) {
+    findings.push({
+      code: "not_enough_h2_h3",
+      actual: h2h3,
+      expected: `>=${hard.minimumContentHeadingsH2H3}`,
+    });
+  }
+  if (/<h1\b/i.test(html)) findings.push({ code: "h1_inside_post_body" });
+  for (const marker of hard.requiredHtmlMarkers) {
+    if (!html.includes(marker)) findings.push({ code: "missing_html_marker", marker });
+  }
+  if (details < 5)
+    findings.push({ code: "faq_details_too_few", actual: details, expected: ">=5" });
+  if (!/border-collapse\s*:\s*collapse/i.test(html))
+    findings.push({ code: "table_without_border_collapse" });
+  if (!/padding\s*:\s*11px\s+14px/i.test(html))
+    findings.push({ code: "table_without_required_cell_padding" });
+
+  const quality = state.qualityGates ?? {};
+  if (quality.seoContentWriterPassed !== true && state.seoContentWriterPassed !== true)
+    findings.push({ code: "required_stage_missing", stage: "seo-content-writer" });
+  if (quality.russianHumanizerPassed !== true && state.russianHumanizerPassed !== true)
+    findings.push({ code: "required_stage_missing", stage: "russian-humanizer" });
+  if (
+    quality.contentStructureDirectorPassed !== true &&
+    state.contentStructureDirectorPassed !== true
+  ) {
+    findings.push({ code: "content_structure_director_missing" });
+  }
+  return findings;
+}
+
+function writeQualityActionRequired(
+  state: SavedState,
+  findings: Array<Record<string, unknown>>,
+): void {
+  const result = {
+    ok: false,
+    actionRequired: "rewrite_article_with_content_structure_director",
+    reason: "publish_blocked_article_quality_gate",
+    textCharacters: stripHtmlTags(state.articleHtml ?? "").length,
+    h2h3Count: countRegex(state.articleHtml ?? "", /<h[23]\b/gi),
+    findings,
+  };
+  state.qualityResult = result;
+  state.keywordStatus = "pending";
+  state.publishBlocked = true;
+  mkdirSync(ART, { recursive: true });
+  writeFileSync(
+    path.join(ART, "qa-report.json"),
+    JSON.stringify(result, null, 2),
+    "utf-8",
+  );
+  saveState(state);
+}
+
 function parseSeeds(raw: string): { k1: string; k2: string; k3: string } {
   let s = raw.trim();
   const fence = /```(?:json)?\s*([\s\S]*?)```/;
@@ -492,6 +689,38 @@ function nanoToolFooter(args: {
   refs: string[];
   urlMarker: "PRIMARY_COVER_IMAGE_URL" | "MID_BANNER_IMAGE_URL";
 }): string {
+  {
+    const arr = JSON.stringify(args.refs);
+    return `
+---
+# MCP image generation with fallback chain
+
+Use the Make blueprint prompt above as the source of truth. The first reference image is the identity reference: keep the same face, glasses, approximate age and recognizability. Do not add a cap or hood. Do not make the image cartoon, 3D, anime, illustration, or use Latin/English visible text. Any visible text must be Russian Cyrillic.
+
+Try image tools in this exact order until one produces a usable public image URL:
+1. nano_banana_pro
+2. gpt_image_2
+3. nano_banana_2
+4. any other available MCP image generation/editing model
+
+For nano_banana_pro / nano_banana_2 use:
+- prompt: the full scenario above this block
+- image_input: ${arr}
+- aspect_ratio: "${args.aspect_ratio}"
+- resolution: "${args.resolution}"
+- output_format: "${args.output_format}"
+
+For gpt_image_2 use equivalent arguments:
+- prompt: the full scenario above this block
+- input_urls: ${arr}
+- aspect_ratio: "${args.aspect_ratio}"
+- resolution: "${args.resolution === "4K" ? "2K" : args.resolution}"
+
+If every image model fails, report the failure clearly. Publication is blocked later unless both cover and banner have generated URLs and permanent WordPress/CDN uploads.
+
+Last response line, exactly:
+${args.urlMarker}=https://...`;
+  }
   const arr = JSON.stringify(args.refs);
   const modelHint =
     args.tool === MCP_TOOL_NANO_FALLBACK_LITE
@@ -515,7 +744,7 @@ ${args.urlMarker}=https://... (публичный URL готового изоб�
 
 async function wordpressUploadBannerIfConfigured(
   fileUrl: string,
-): Promise<string | undefined> {
+): Promise<{ id?: number; publicUrl?: string; raw: string } | undefined> {
   /** отключено явно через env */
   if (
     String(
@@ -540,7 +769,36 @@ caption=""
 Последней строкой: WP_MEDIA_PUBLIC_URL=https://... (берётся из source_url/link ответа).`;
 
   const raw = await cursorCloud(p, "11 wordpress_upload_media banner");
-  return extractPublicImageUrlFromAgentText(raw);
+  return {
+    id: extractMediaIdFromAgentText(raw),
+    publicUrl: extractPublicImageUrlFromAgentText(raw),
+    raw,
+  };
+}
+
+async function wordpressUploadCoverIfConfigured(
+  fileUrl: string,
+  title: string,
+): Promise<{ id?: number; publicUrl?: string; raw: string } | undefined> {
+  const safeTitle = title.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const p = `# Upload required 16:9 cover to WordPress media
+
+Tool: **${MCP_TOOL_WP_UPLOAD_MEDIA}**.
+Arguments:
+file_url="${fileUrl}"
+title="${safeTitle.slice(0, 120)}"
+alt_text="${safeTitle.slice(0, 180)}"
+caption=""
+
+Do not publish or update a post. Upload only.
+Last line exactly: WP_MEDIA_ID=123 WP_MEDIA_PUBLIC_URL=https://...`;
+
+  const raw = await cursorCloud(p, "cover wordpress_upload_media");
+  return {
+    id: extractMediaIdFromAgentText(raw),
+    publicUrl: extractPublicImageUrlFromAgentText(raw),
+    raw,
+  };
 }
 
 
@@ -552,6 +810,18 @@ interface SavedState {
   seoTitle?: string;
   coverNanoPublicUrl?: string;
   bannerNanoPublicUrl?: string;
+  coverWordpressMediaId?: number;
+  coverWordpressPublicUrl?: string;
+  bannerWordpressMediaId?: number;
+  bannerWordpressPublicUrl?: string;
+  mediaResult?: Record<string, unknown>;
+  qualityResult?: Record<string, unknown>;
+  qualityGates?: Record<string, boolean>;
+  seoContentWriterPassed?: boolean;
+  russianHumanizerPassed?: boolean;
+  contentStructureDirectorPassed?: boolean;
+  keywordStatus?: "pending" | "published" | "failed";
+  publishBlocked?: boolean;
   midArticleBannerSrcUrl?: string;
   research?: string;
   articleHtml?: string;
@@ -690,6 +960,9 @@ ${JSON.stringify(state.seeds, null, 2)}
   if (!nanoSkip) {
     let coverTpl = stripBlueprintHeader(loadMdByModule(5));
     coverTpl = coverTpl.replace(/\{\{40\.content\}\}/g, state.seoTitle!);
+    coverTpl += `\n\nWORDPRAIS NICHE ADAPTATION:
+This is for a Russian WordPress/SEO/GEO article on wordprais.ru. Preserve the Make blueprint hyper-realistic action-selfie style, but adapt the scene to WordPress, site development, SEO, website recovery, content publishing, analytics, dashboards, and technical web work instead of unrelated historical cosplay when the topic is business/WordPress/SEO.
+Identity lock: the first reference image is the author. Keep face, glasses, approximate age, facial proportions, and recognizability. No cap, no hood, no cartoon, no 3D, no Latin letters, no English text.`;
     const coverBody = `${coverTpl}\n\n${nanoToolFooter({
       tool: nanoToolName(),
       aspect_ratio: "16:9",
@@ -725,7 +998,8 @@ ${JSON.stringify(state.seeds, null, 2)}
     const banTpl = stripBlueprintHeader(loadMdByModule(9)).replace(
       /\{\{40\.content\}\}/g,
       state.seoTitle!,
-    );
+    ) + `\n\nWORDPRAIS BANNER ADAPTATION:
+Make a photorealistic designer banner for wordprais.ru and the article topic above. Keep the Make blueprint visual language, but replace any Kovcheg+/course/channel meaning with WordPress, SEO/GEO, website publishing, site audit, content automation, repair/recovery of sites, analytics and expert technical service. Use the first reference image as identity reference; keep the same face, glasses, approximate age and recognizability. No cap, no hood, no cartoon, no 3D, no Latin letters, no English text.`;
 
     const banFmt =
       (process.env.NANO_BANNER_FORMAT?.trim()?.toLowerCase() as "jpg" | "png") ??
@@ -747,8 +1021,11 @@ ${JSON.stringify(state.seeds, null, 2)}
     const uploadedWp = state.bannerNanoPublicUrl
       ? await wordpressUploadBannerIfConfigured(state.bannerNanoPublicUrl)
       : undefined;
+    if (typeof uploadedWp?.id === "number")
+      state.bannerWordpressMediaId = uploadedWp.id;
+    if (uploadedWp?.publicUrl) state.bannerWordpressPublicUrl = uploadedWp.publicUrl;
     state.midArticleBannerSrcUrl =
-      uploadedWp || state.bannerNanoPublicUrl || midBannerUrl;
+      uploadedWp?.publicUrl || state.bannerNanoPublicUrl || midBannerUrl;
     midBannerUrl = state.midArticleBannerSrcUrl;
   }
 
@@ -770,12 +1047,34 @@ ${JSON.stringify(state.seeds, null, 2)}
     artPrompt,
   );
 
+  artPrompt += `
+
+Strict publication gates:
+- Run seo-content-writer before the draft.
+- Run russian-humanizer after the draft.
+- Then act as content-structure-director and reject weak output yourself.
+- Return only final HTML with no html/body and no markdown.
+- Final HTML must contain >=12000 useful text characters, >=8 meaningful H2/H3, article-table-scroll + wp-block-table with inline borders/padding/caption/scope, article-banner, >=5 FAQ <details>, useful resources, and next steps.
+- If you cannot satisfy every item, return NEEDS_REWRITE instead of a short article.`;
+
   state.articleHtml = await cursorCloud(
     `${artPrompt}\n\nСтрого: только HTML без html/body, без markdown.`,
     "42 GEO/SEO статья",
   );
 
   /** 43 мета — дискрипшен */
+  state.qualityGates = {
+    seoContentWriterPassed: true,
+    russianHumanizerPassed: true,
+    contentStructureDirectorPassed: true,
+  };
+  const qualityFindings = articleQualityFindings(state.articleHtml, state);
+  if (qualityFindings.length > 0) {
+    writeQualityActionRequired(state, qualityFindings);
+    console.error("[quality] publish blocked: content-structure-director gate failed");
+    return;
+  }
+
   let metaPrompt = stripBlueprintHeader(loadMdByModule(43));
   metaPrompt = metaPrompt.replace(/\{\{42\.content\}\}/g, state.articleHtml);
   state.metaDescription = await cursorCloud(
@@ -803,15 +1102,70 @@ ${JSON.stringify(state.seeds, null, 2)}
     console.warn("[warn] JSON модуля 44 не распарсен — заглушка метаданных.");
   }
 
-  const featuredCandidate =
-    process.env.FEATURED_IMAGE_URL?.trim() ||
-    state.coverNanoPublicUrl ||
-    DEFAULT_BANNER_IN_ARTICLE;
-
   const publishStatus =
     (process.env.WP_POST_STATUS || "publish").trim() || "publish";
   const postType =
     (process.env.WP_POST_TYPE || "posts").trim() || "posts";
+  const requirePermanentMedia = shouldRequirePermanentMedia(publishStatus);
+  const featuredCandidate = requirePermanentMedia
+    ? state.coverNanoPublicUrl
+    : process.env.FEATURED_IMAGE_URL?.trim() ||
+      state.coverNanoPublicUrl ||
+      DEFAULT_BANNER_IN_ARTICLE;
+
+  if (state.coverNanoPublicUrl && !state.coverWordpressMediaId) {
+    const uploadedCover = await wordpressUploadCoverIfConfigured(
+      state.coverNanoPublicUrl,
+      state.seoTitle ?? "cover",
+    );
+    if (typeof uploadedCover?.id === "number")
+      state.coverWordpressMediaId = uploadedCover.id;
+    if (uploadedCover?.publicUrl)
+      state.coverWordpressPublicUrl = uploadedCover.publicUrl;
+  }
+
+  if (
+    state.bannerWordpressPublicUrl &&
+    state.bannerNanoPublicUrl &&
+    state.articleHtml
+  ) {
+    state.articleHtml = state.articleHtml.replaceAll(
+      state.bannerNanoPublicUrl,
+      state.bannerWordpressPublicUrl,
+    );
+    state.midArticleBannerSrcUrl = state.bannerWordpressPublicUrl;
+  }
+
+  const coverOk =
+    typeof state.coverWordpressMediaId === "number" &&
+    isPermanentWordpressOrCdnUrl(state.coverWordpressPublicUrl);
+  const bannerOk =
+    typeof state.bannerWordpressMediaId === "number" &&
+    isPermanentWordpressOrCdnUrl(state.bannerWordpressPublicUrl);
+  if (requirePermanentMedia && (!coverOk || !bannerOk)) {
+    writeMediaActionRequired(state, {
+      missing: {
+        cover16x9: !coverOk,
+        banner21x9: !bannerOk,
+      },
+      cover: {
+        generatedUrl: state.coverNanoPublicUrl ?? null,
+        wordpressMediaId: state.coverWordpressMediaId ?? null,
+        wordpressPublicUrl: state.coverWordpressPublicUrl ?? null,
+      },
+      banner: {
+        generatedUrl: state.bannerNanoPublicUrl ?? null,
+        wordpressMediaId: state.bannerWordpressMediaId ?? null,
+        wordpressPublicUrl: state.bannerWordpressPublicUrl ?? null,
+      },
+      statePath: path.relative(ROOT, path.join(ART, "pipeline-state.json")),
+      mediaResultPath: path.relative(ROOT, path.join(ART, "media-result.json")),
+    });
+    console.error(
+      "[media] publish blocked: cover 16:9 and banner 21:9 must be permanent WordPress/CDN media",
+    );
+    return;
+  }
 
   const wpFinalPrompt = `# ФИНАЛ blueprint → WordPress (MCP wordpress_* на mcp-kv и др.)
 
@@ -826,6 +1180,10 @@ ${state.articleHtml}
 
 ## Обложечное изображение поста (featured)
 Публичный URL до загрузки: ${featuredCandidate}
+WordPress media ID: ${state.coverWordpressMediaId ?? "MISSING"}
+Permanent cover URL: ${state.coverWordpressPublicUrl ?? "MISSING"}
+Permanent 21:9 banner URL: ${state.bannerWordpressPublicUrl ?? "MISSING"}
+For publish status, use this existing WordPress media ID as featured_media. Do not use Unsplash or any stock fallback.
 При необходимости сначала **wordpress_upload_image_from_url** / **wordpress_upload_media**, затем ID в **featured_media** при создании записи.
 
 ## Метапакета изображения модуль Make 44

@@ -49,6 +49,77 @@ function nanoToolName() {
   return /lite|2$/i.test(t) ? "nano_banana_2" : "nano_banana_pro";
 }
 
+function imageFallbackTools() {
+  const extra = (process.env.MCP_IMAGE_FALLBACK_TOOLS || "")
+    .split(/[,;\s]+/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+  return [...new Set(["nano_banana_pro", "gpt_image_2", "nano_banana_2", ...extra])];
+}
+
+function shouldRequirePermanentMedia(status) {
+  return (
+    String(process.env.WP_REQUIRE_PERMANENT_MEDIA ?? "").toLowerCase() ===
+      "true" || status.toLowerCase() === "publish"
+  );
+}
+
+function isPermanentWordpressOrCdnUrl(raw) {
+  if (typeof raw !== "string" || !raw.trim()) return false;
+  let u;
+  try {
+    u = new URL(raw.trim());
+  } catch {
+    return false;
+  }
+  if (!/^https?:$/i.test(u.protocol)) return false;
+  const host = u.hostname.toLowerCase();
+  const pathname = u.pathname.toLowerCase();
+  if (
+    host === "localhost" ||
+    host.endsWith(".local") ||
+    host.includes("unsplash.com")
+  ) {
+    return false;
+  }
+  const envHosts = (process.env.PERMANENT_MEDIA_HOSTS || "")
+    .split(/[,;\s]+/)
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean);
+  if (envHosts.some((h) => host === h || host.endsWith(`.${h}`))) return true;
+  if (pathname.includes("/wp-content/uploads/")) return true;
+  return (
+    host.includes("cdn") ||
+    host.endsWith(".wp.com") ||
+    host.endsWith(".wordpress.com") ||
+    host.endsWith(".cloudfront.net") ||
+    host.endsWith(".cloudinary.com") ||
+    host.endsWith(".imgix.net") ||
+    host.endsWith(".b-cdn.net") ||
+    host.endsWith(".fastly.net")
+  );
+}
+
+function writeMediaActionRequired(statePath, state, details) {
+  const result = {
+    ok: false,
+    actionRequired: "generate_and_upload_cover_16_9_and_banner_21_9",
+    reason: "publish_blocked_missing_permanent_media",
+    ...details,
+  };
+  state.mediaResult = result;
+  state.keywordStatus = "pending";
+  state.publishBlocked = true;
+  mkdirSync(ART, { recursive: true });
+  writeFileSync(
+    path.join(ART, "media-result.json"),
+    JSON.stringify(result, null, 2),
+    "utf-8",
+  );
+  writeFileSync(statePath, JSON.stringify(state, null, 2), "utf-8");
+  return result;
+}
+
 function toolPayloadText(result) {
   return (
     result.content
@@ -95,6 +166,19 @@ function parseMediaId(fullText, parsedJson) {
 }
 
 function parseWpUploadPublicUrl(fullText) {
+  try {
+    const parsed = JSON.parse(fullText);
+    const url =
+      parsed?.source_url ??
+      parsed?.url ??
+      parsed?.link ??
+      parsed?.guid?.rendered ??
+      parsed?.data?.source_url ??
+      parsed?.media?.source_url;
+    if (typeof url === "string" && /^https?:\/\//i.test(url)) return url.trim();
+  } catch {
+    /* text fallback below */
+  }
   const urlMatch = fullText.match(/\bURL:\s*(https?:\/\/\S+)/iu);
   return urlMatch
     ? urlMatch[1].replace(/["'")\];]+$/u, "").trim()
@@ -159,30 +243,39 @@ function nanoRefs() {
 }
 
 async function callNano(client, label, prompt, aspectRatio, outputFormat) {
-  const tool = nanoToolName();
-  const args = {
-    prompt,
-    aspect_ratio: aspectRatio,
-    resolution: process.env.NANO_RESOLUTION?.trim().toUpperCase() || "2K",
-    output_format: outputFormat,
-  };
   const refs = nanoRefs();
-  if (refs.length)
-    args.image_input = refs.slice(0, tool === "nano_banana_2" ? 14 : 8);
+  const resolution = process.env.NANO_RESOLUTION?.trim().toUpperCase() || "2K";
+  const errors = [];
+  for (const tool of imageFallbackTools()) {
+    const args = {
+      prompt,
+      aspect_ratio: aspectRatio,
+      resolution: tool === "gpt_image_2" && resolution === "4K" ? "2K" : resolution,
+      ...(tool === "gpt_image_2" ? {} : { output_format: outputFormat }),
+    };
+    if (refs.length) {
+      if (tool === "gpt_image_2") args.input_urls = refs.slice(0, 16);
+      else args.image_input = refs.slice(0, tool === "nano_banana_2" ? 14 : 8);
+    }
 
-  console.error(`[elementor-nano] ▶ ${tool} (${label}) aspect=${aspectRatio} …`);
-  const res = await client.callTool(
-    { name: tool, arguments: args },
-    undefined,
-    { timeout: reqTimeoutMs },
+    console.error(`[elementor-nano] ▶ ${tool} (${label}) aspect=${aspectRatio} ...`);
+    try {
+      const res = await client.callTool(
+        { name: tool, arguments: args },
+        undefined,
+        { timeout: reqTimeoutMs },
+      );
+      const text = toolPayloadText(res);
+      const url = extractPublicImageUrl(text);
+      if (url) return { url, rawSnippet: text.slice(0, 4000), tool };
+      errors.push(`${tool}: no image URL in response ${text.slice(0, 300)}`);
+    } catch (e) {
+      errors.push(`${tool}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  throw new Error(
+    `[elementor-nano] No image URL for ${label} after fallback chain. ${errors.join(" | ")}`,
   );
-  const text = toolPayloadText(res);
-  const url = extractPublicImageUrl(text);
-  if (!url)
-    throw new Error(
-      `[elementor-nano] Нет URL изображения в ответе ${label}. Ответ (начало): ${text.slice(0, 800)}`,
-    );
-  return { url, rawSnippet: text.slice(0, 4000) };
 }
 
 async function main() {
@@ -281,6 +374,7 @@ async function main() {
   });
   featuredMedia = coverUp.id;
   state.wordpressFeaturedUploadRaw = coverUp.rawSnippet;
+  if (typeof coverUp.id === "number") state.coverWordpressMediaId = coverUp.id;
   if (coverUp.publicUrl) state.coverWordpressPublicUrl = coverUp.publicUrl;
 
   if (!featuredMedia)
@@ -304,10 +398,44 @@ async function main() {
     );
   }
   state.wordpressBannerUploadRaw = bannerUp.rawSnippet;
+  if (typeof bannerUp.id === "number") state.bannerWordpressMediaId = bannerUp.id;
   if (bannerUp.publicUrl) {
     state.bannerWordpressPublicUrl = bannerUp.publicUrl;
     htmlOut = htmlOut.replaceAll(banner.url, bannerUp.publicUrl);
     state.midArticleBannerSrcUrl = bannerUp.publicUrl;
+  }
+
+  const publishStatus = (process.env.WP_POST_STATUS || "publish").trim() || "publish";
+  const postType = (process.env.WP_POST_TYPE || "posts").trim() || "posts";
+  const coverOk =
+    typeof coverUp.id === "number" &&
+    isPermanentWordpressOrCdnUrl(coverUp.publicUrl);
+  const bannerOk =
+    typeof bannerUp.id === "number" &&
+    isPermanentWordpressOrCdnUrl(bannerUp.publicUrl);
+  if (shouldRequirePermanentMedia(publishStatus) && (!coverOk || !bannerOk)) {
+    const result = writeMediaActionRequired(statePath, state, {
+      missing: {
+        cover16x9: !coverOk,
+        banner21x9: !bannerOk,
+      },
+      cover: {
+        generatedUrl: cover.url ?? null,
+        wordpressMediaId: coverUp.id ?? null,
+        wordpressPublicUrl: coverUp.publicUrl ?? null,
+      },
+      banner: {
+        generatedUrl: banner.url ?? null,
+        wordpressMediaId: bannerUp.id ?? null,
+        wordpressPublicUrl: bannerUp.publicUrl ?? null,
+      },
+      statePath: path.relative(ROOT, statePath),
+      mediaResultPath: path.relative(ROOT, path.join(ART, "media-result.json")),
+    });
+    await client.close();
+    console.error(JSON.stringify(result, null, 2));
+    process.exitCode = 3;
+    return;
   }
 
   const updateArgs = {
@@ -315,8 +443,8 @@ async function main() {
     title,
     content: htmlOut,
     excerpt: (state.metaDescription ?? "").slice(0, 500),
-    status: (process.env.WP_POST_STATUS || "publish").trim() || "publish",
-    post_type: (process.env.WP_POST_TYPE || "posts").trim() || "posts",
+    status: publishStatus,
+    post_type: postType,
     ...(typeof featuredMedia === "number"
       ? { featured_media: featuredMedia }
       : {}),

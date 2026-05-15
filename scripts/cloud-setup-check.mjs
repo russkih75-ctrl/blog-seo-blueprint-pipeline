@@ -116,6 +116,37 @@ try {
 
 	if (process.exitCode && process.exitCode !== 0) process.exit(process.exitCode);
 } catch (e) {
-	console.error(e);
-	process.exit(1);
+	const status = e?.status ?? e?.response?.status;
+	const operation = e?.operation ?? e?.endpoint;
+	if (status === 401) {
+		console.error(
+			JSON.stringify(
+				{
+					ok: false,
+					blocker: "cursor_api_key_unauthorized",
+					status,
+					operation: operation ?? "Cursor API",
+					actionRequired:
+						"Create or reconnect a valid Cursor API key for this account/workspace, update CURSOR_API_KEY in the runtime secrets, then rerun npm run check:cloud-setup and Cursor Automation Test run.",
+				},
+				null,
+				2,
+			),
+		);
+	} else {
+		console.error(
+			JSON.stringify(
+				{
+					ok: false,
+					blocker: "cursor_cloud_setup_check_failed",
+					status: status ?? null,
+					operation: operation ?? null,
+					error: e instanceof Error ? e.message : String(e),
+				},
+				null,
+				2,
+			),
+		);
+	}
+	process.exitCode = 1;
 }

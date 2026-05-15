@@ -4,8 +4,18 @@
   "referenceUsage": "structure_style_length_only",
   "factualSource": false,
   "visualReferencePolicy": "separate_user_face_reference_identity_locked",
-  "averageLengthPolicy": "Ориентир средней длины и плотности блоков как у референса структуры (лендинг-блог): заголовки, лиды, таблицы, FAQ по месту; точный объём подгонять под нишу и ключи без копирования текста референса.",
-  "notes": "Любые URL статьи-образца задают только структуру, стиль, ритм и блоки — не факты и не картинки. Факты только из отдельного Research. Тело статьи всегда уникально под нишу.",
+  "averageLengthPolicy": "Всегда выпускать длинную структурированную статью в mayai-like каркасе: минимум 12000 символов финального HTML и минимум 8 содержательных H2/H3. Короткая статья, заметка, дайджест или пост-заглушка запрещены; если фактуры не хватает, вернуть needs_more_research.",
+  "notes": "Любые URL статьи-образца задают только структуру, стиль, ритм и блоки — не факты и не картинки. Факты только из отдельного Research. Тело статьи всегда уникально под нишу. Обязательные стадии: seo-content-writer перед черновиком и russian-humanizer перед финальным HTML.",
+  "minimums": {
+    "finalHtmlCharacters": 12000,
+    "contentHeadingsH2H3": 8,
+    "callouts": 2,
+    "faqItems": 5
+  },
+  "requiredWorkflowStages": [
+    "seo-content-writer",
+    "russian-humanizer"
+  ],
   "requiredSections": [
     {
       "id": "h1_title",
@@ -21,11 +31,15 @@
     },
     {
       "id": "body_blocks",
-      "role": "Контентные блоки: Важно / Ошибка / Шаг / Инсайт (не все подряд — по смыслу)"
+      "role": "Минимум 8 содержательных H2/H3 после лида; каждый раздел раскрывает отдельный аспект темы без воды и повторов"
+    },
+    {
+      "id": "callouts",
+      "role": "2–4 врезки Важно / Ошибка / Шаг / Инсайт по смыслу, не подряд"
     },
     {
       "id": "tables",
-      "role": "≥1 таблица сравнения или чек-листа: вёрстка с видимыми границами ячеек (рамки, padding, шапка), как в prompts/wordpress-articles/HTML_STRUCTURE_WORDPRAIS.md — не минималистичный table без стилей"
+      "role": "≥1 таблица сравнения или чек-листа: exactly like HTML_STRUCTURE_WORDPRAIS sample — article-table-scroll + figure.wp-block-table + caption + scope=col + inline border/padding/header styles; не минималистичный table без стилей"
     },
     {
       "id": "implementation_scenarios",

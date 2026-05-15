@@ -16,7 +16,25 @@
   "structureReference": {
     "blueprintName": "RU SEO/GEO СТАТЬИ ДЛЯ БЛОГА 2026",
     "exampleLayoutArticleUrl": "https://mayai.ru/avtomatizacziya-biznes-proczessov-kak-ii-upravlyaet-umnym-proizvodstvom-v-2026-godu/",
-    "referenceUsage": "Только порядок и тип блоков (лид, секции H2, врезки, таблица, баннер в теле, FAQ details, блок «что дальше», вторичный FAQ при необходимости). Тексты, факты, имена и промо — не копировать."
+    "referenceUsage": "Только порядок и тип блоков (оглавление, лид, 8+ H2/H3, врезки, таблица, баннер в теле, FAQ details, полезные ресурсы, блок «что дальше», вторичный FAQ при необходимости). Тексты, факты, имена и промо — не копировать.",
+    "minimumFinalHtmlCharacters": 12000,
+    "minimumContentHeadingsH2H3": 8,
+    "shortArticlePolicy": "Запрещено публиковать короткую статью, заметку, дайджест или пост-заглушку. Если проверенной фактуры недостаточно для длинной статьи, остановить выпуск и вернуть needs_more_research.",
+    "requiredWorkflowStages": [
+      "seo-content-writer",
+      "russian-humanizer"
+    ],
+    "requiredBlocks": [
+      "table_of_contents",
+      "lead",
+      "8_plus_h2_h3",
+      "callouts",
+      "html_table_exactly_like_HTML_STRUCTURE_WORDPRAIS_sample",
+      "faq",
+      "useful_resources",
+      "next_steps"
+    ],
+    "factPolicy": "No fake facts: цифры, даты, кейсы, сравнения, имена, цитаты и выводы о рынке только из Research или с явной пометкой requires_verification."
   },
   "nanoFromMcpKv": {
     "preferredTools": ["nano_banana_pro", "nano_banana_2"],

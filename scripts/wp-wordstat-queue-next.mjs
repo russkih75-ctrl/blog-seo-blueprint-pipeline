@@ -66,6 +66,37 @@ function loadContentIndexEntries() {
   return Array.isArray(idx.entries) ? idx.entries : [];
 }
 
+function indexEntryBlocksPhrase(entry) {
+  const status = String(entry.status ?? "");
+  return (
+    entry.keywordState === "processed" ||
+    status.includes("published") ||
+    status === "published_verified" ||
+    status.includes("verified") ||
+    Boolean(entry.publicUrl || entry.verifiedAt || entry.publishVerifiedAt)
+  );
+}
+
+function contentIndexBlockedNorms(entries) {
+  const out = new Set();
+  for (const entry of entries) {
+    if (!indexEntryBlocksPhrase(entry)) continue;
+    for (const key of [
+      "phrase",
+      "normalizedPhrase",
+      "primaryKeyword",
+      "primaryKeywordNorm",
+      "keywordNorm",
+    ]) {
+      const value = entry[key];
+      if (typeof value !== "string") continue;
+      const norm = normalizeFingerprint(value);
+      if (norm) out.add(norm);
+    }
+  }
+  return out;
+}
+
 function collisionWithIndex(phrase, entries) {
   const np = normalizeFingerprint(phrase);
   const sp = slugifyPrimary(phrase);
@@ -90,7 +121,17 @@ function defaultCursor() {
     seedPointer: 0,
     queryOffsetBySeed: {},
     emittedPhrasesNorm: [],
+    pendingPhrasesNorm: [],
+    processedPhrasesNorm: [],
+    phraseStateByNorm: {},
   };
+}
+
+function pushUniqueCapped(values, next, max = 400) {
+  const normalized = values.map((x) => normalizeFingerprint(String(x))).filter(Boolean);
+  const existing = new Set(normalized);
+  if (next && !existing.has(next)) normalized.push(next);
+  return normalized.slice(-max);
 }
 
 function buildRefillTaskRu(cfg) {
@@ -125,7 +166,13 @@ function pickNextPhrase(cfg, cursor, indexEntries, excludedSet) {
   if (!workSeeds.length) return null;
 
   const n = workSeeds.length;
-  const emittedSet = new Set((cursor.emittedPhrasesNorm ?? []).map((x) => String(x)));
+  const emittedSet = new Set(
+    (cursor.emittedPhrasesNorm ?? [])
+      .map((x) => normalizeFingerprint(String(x)))
+      .filter(Boolean),
+  );
+  const blockedIndexSet = contentIndexBlockedNorms(indexEntries);
+  const blockingIndexEntries = indexEntries.filter(indexEntryBlocksPhrase);
 
   for (let attempt = 0; attempt < n * 8; attempt++) {
     const si = (cursor.seedPointer + attempt) % n;
@@ -145,13 +192,22 @@ function pickNextPhrase(cfg, cursor, indexEntries, excludedSet) {
       if (excludedBranded.has(nn)) continue;
       if (excludedSet.has(nn)) continue;
       if (emittedSet.has(nn)) continue;
-      if (collisionWithIndex(phrase, indexEntries)) continue;
+      if (blockedIndexSet.has(nn)) continue;
+      if (collisionWithIndex(phrase, blockingIndexEntries)) continue;
 
       cursor.seedPointer = (si + 1) % n;
       cursor.queryOffsetBySeed[seed.id] = j + 1;
-      const emitted = [...(cursor.emittedPhrasesNorm ?? [])];
-      emitted.push(nn);
-      cursor.emittedPhrasesNorm = emitted.slice(-400);
+      cursor.emittedPhrasesNorm = pushUniqueCapped(cursor.emittedPhrasesNorm ?? [], nn);
+      cursor.pendingPhrasesNorm = pushUniqueCapped(cursor.pendingPhrasesNorm ?? [], nn);
+      cursor.phraseStateByNorm = {
+        ...(cursor.phraseStateByNorm ?? {}),
+        [nn]: {
+          state: "pending",
+          phrase,
+          seedId: seed.id,
+          emittedAt: new Date().toISOString(),
+        },
+      };
 
       return {
         seed,
