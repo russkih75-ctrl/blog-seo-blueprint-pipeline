@@ -3,6 +3,7 @@
  * Следующая задача для автоматизации «Вордпресс статьи» по очереди Wordstat (семена ws_01 … ws_16).
  * Пишет курсор в artifacts/wordstat-queue-cursor.json и последний снимок в artifacts/wordstat-queue-last.json.
  * При исчерпании доступных фраз — создаёт artifacts/wordstat-queue-need-refill.flag и отдаёт задание на пополнение семантики (ЯДрышко).
+ * Флаг CLI `--peek` или WORDSTAT_QUEUE_PEEK_ONLY=true — выдать taskRu без продвижения курсора (пока нет verified publication).
  */
 import {
   existsSync,
@@ -197,20 +198,28 @@ function buildTopicTaskRu(cfg, meta, cluster, seed, phrase, shows) {
 
 function main() {
   mkdirSync(ART, { recursive: true });
+  const peekOnly =
+    process.argv.includes("--peek") ||
+    String(process.env.WORDSTAT_QUEUE_PEEK_ONLY ?? "")
+      .trim()
+      .toLowerCase() === "true";
   const cfgPath = loadAutomationPath();
   const cfg = JSON.parse(readFileSync(cfgPath, "utf-8"));
   const meta = cfg.meta ?? {};
   const clustersById = Object.fromEntries((cfg.clusters ?? []).map((c) => [c.id, c]));
 
-  let cursor = readJsonSafe(CURSOR_PATH, defaultCursor());
+  const cursorSaved = readJsonSafe(CURSOR_PATH, defaultCursor());
+  let cursor = cursorSaved;
   if (!cursor.version) cursor = defaultCursor();
+  /** pickNextPhrase мутирует cursor — при peek не трогаем сохранённый файл курсора */
+  const cursorForPick = peekOnly ? structuredClone(cursor) : cursor;
 
   const indexEntries = loadContentIndexEntries();
   const excludedNorm = new Set(
     (cfg.excludedBrandedQueries ?? []).map((s) => normalizeFingerprint(String(s))),
   );
 
-  const picked = pickNextPhrase(cfg, cursor, indexEntries, excludedNorm);
+  const picked = pickNextPhrase(cfg, cursorForPick, indexEntries, excludedNorm);
 
   let out;
   if (!picked) {
@@ -238,8 +247,12 @@ function main() {
     };
   }
 
-  writeJsonAtomic(CURSOR_PATH, cursor);
-  writeJsonAtomic(LAST_OUT_PATH, { ...out, generatedAt: new Date().toISOString() });
+  if (!peekOnly) writeJsonAtomic(CURSOR_PATH, cursorForPick);
+  writeJsonAtomic(LAST_OUT_PATH, {
+    ...out,
+    generatedAt: new Date().toISOString(),
+    ...(peekOnly ? { peekOnly: true, cursorUnchanged: true } : {}),
+  });
 
   process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
 }

@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "stages": [
+    { "id": "director", "order": 1, "label": "Director / intake" },
+    { "id": "research", "order": 2, "label": "Research" },
+    { "id": "keywords", "order": 3, "label": "Keywords & GEO" },
+    { "id": "seo", "order": 4, "label": "SEO каркас" },
+    { "id": "writer", "order": 5, "label": "Writer" },
+    { "id": "humanizer", "order": 6, "label": "Humanizer RU" },
+    { "id": "duplicate", "order": 7, "label": "Duplicate guardian" },
+    { "id": "media", "order": 8, "label": "Медиа / Nano" },
+    { "id": "publisher", "order": 9, "label": "WordPress publish" },
+    { "id": "supervisor", "order": 10, "label": "Supervisor QA" },
+    { "id": "indexnow", "order": 11, "label": "IndexNow" }
+  ]
+}

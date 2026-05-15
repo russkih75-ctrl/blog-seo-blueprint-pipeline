@@ -31,6 +31,7 @@
     "wp:publish-streamable": "node scripts/wp-publish-streamable.mjs",
     "wp:delete-post": "node scripts/wp-delete-post-streamable.mjs",
     "wp:wordstat-queue-next": "node scripts/wp-wordstat-queue-next.mjs",
+    "wp:wordstat-queue-next:peek": "node scripts/wp-wordstat-queue-next.mjs --peek",
     "install:yadryshko-subagent": "node scripts/install-yadryshko-subagent.mjs",
     "mcp:tools-check": "node scripts/mcp-sse-tools-check.mjs"
   },
