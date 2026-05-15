@@ -7,6 +7,8 @@ dist/
 .telegram-agent-sessions.json
 .telegram-schedules.json
 artifacts/
+tmp/
+prompts/_automation_cache/
 vendor/
 *.log
 
