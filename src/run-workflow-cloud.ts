@@ -961,8 +961,8 @@ ${JSON.stringify(state.seeds, null, 2)}
     let coverTpl = stripBlueprintHeader(loadMdByModule(5));
     coverTpl = coverTpl.replace(/\{\{40\.content\}\}/g, state.seoTitle!);
     coverTpl += `\n\nWORDPRAIS NICHE ADAPTATION:
-This is for a Russian WordPress/SEO/GEO article on wordprais.ru. Preserve the Make blueprint hyper-realistic action-selfie style, but adapt the scene to WordPress, site development, SEO, website recovery, content publishing, analytics, dashboards, and technical web work instead of unrelated historical cosplay when the topic is business/WordPress/SEO.
-Identity lock: the first reference image is the author. Keep face, glasses, approximate age, facial proportions, and recognizability. No cap, no hood, no cartoon, no 3D, no Latin letters, no English text.`;
+Use the Make blueprint cover logic from module 5, but adapt only the niche: this is for a Russian WordPress/SEO/GEO/AI-search article on wordprais.ru. Keep the hyper-realistic 24mm action-selfie photo style. Replace unrelated historical cosplay with WordPress development, site architecture, admin dashboards, plugins, themes, backups, security, hacked-site recovery, content publishing, SEO/GEO, analytics, schema, semantic clusters, and technical web work when the article topic is business/WordPress/SEO.
+Use all reference_image_urls as image_input. The first reference image is the identity anchor; the others are face-consistency references. identity_lock=true: keep the same face, glasses, approximate age, facial proportions, recognizability, skin texture, and real-camera look. Do not use stock people. No cap, no hood, no cartoon, no 3D, no anime, no plastic skin, no Latin letters, no English text. If text is needed, use short readable Russian Cyrillic only.`;
     const coverBody = `${coverTpl}\n\n${nanoToolFooter({
       tool: nanoToolName(),
       aspect_ratio: "16:9",
@@ -999,7 +999,8 @@ Identity lock: the first reference image is the author. Keep face, glasses, appr
       /\{\{40\.content\}\}/g,
       state.seoTitle!,
     ) + `\n\nWORDPRAIS BANNER ADAPTATION:
-Make a photorealistic designer banner for wordprais.ru and the article topic above. Keep the Make blueprint visual language, but replace any Kovcheg+/course/channel meaning with WordPress, SEO/GEO, website publishing, site audit, content automation, repair/recovery of sites, analytics and expert technical service. Use the first reference image as identity reference; keep the same face, glasses, approximate age and recognizability. No cap, no hood, no cartoon, no 3D, no Latin letters, no English text.`;
+Use the Make blueprint banner logic from module 9, but adapt only the niche. Make a photorealistic 21:9 designer banner for wordprais.ru and the article topic above. Replace Kovcheg+/course/channel meanings with WordPress, SEO/GEO, AI-search visibility, website publishing, site audit, content automation, site repair/recovery, analytics, schema, and expert technical service.
+Use all reference_image_urls as image_input. The first reference image is the identity anchor; the others are face-consistency references. identity_lock=true: keep the same face, glasses, approximate age, facial proportions, recognizability, and realistic skin texture. No cap, no hood, no cartoon, no 3D, no anime, no plastic skin, no Latin letters, no English text. If text is needed, use short readable Russian Cyrillic only.`;
 
     const banFmt =
       (process.env.NANO_BANNER_FORMAT?.trim()?.toLowerCase() as "jpg" | "png") ??
