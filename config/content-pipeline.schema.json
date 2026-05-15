@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wordprais.ru/schemas/content-pipeline-placeholder.json",
+  "title": "Content pipeline (placeholder)",
+  "type": "object",
+  "additionalProperties": true,
+  "description": "Заглушка схемы для валидации наличия файла в content:check. Расширяйте по мере формализации пайплайна."
+}

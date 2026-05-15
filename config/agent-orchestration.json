@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "stages": [
+    { "id": "director", "order": 0, "label": "Director / intake" },
+    { "id": "keywords", "order": 10, "label": "Ключи и семантика" },
+    { "id": "research", "order": 20, "label": "Research" },
+    { "id": "seo", "order": 30, "label": "SEO / GEO каркас" },
+    { "id": "media", "order": 40, "label": "Изображения MCP" },
+    { "id": "writer", "order": 50, "label": "Writer" },
+    { "id": "humanizer", "order": 60, "label": "Humanizer" },
+    { "id": "duplicate_guardian", "order": 70, "label": "Антидубль" },
+    { "id": "publisher", "order": 80, "label": "WordPress publish" },
+    { "id": "indexnow", "order": 90, "label": "IndexNow" },
+    { "id": "supervisor", "order": 100, "label": "Supervisor QA" }
+  ]
+}

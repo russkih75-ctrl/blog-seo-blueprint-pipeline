@@ -181,7 +181,7 @@ function validateConfigs(): void {
     JSON.parse(readFileSync(p, "utf-8"));
   }
   const orch = loadOrchestration();
-  const ids = orch.stages.map((s) => s.id);
+  const ids = orch.stages.map((s: { id: string }) => s.id);
   if (new Set(ids).size !== ids.length)
     throw new Error("Дубликаты id в agent-orchestration.json");
   loadStyleTemplate(REPO_ROOT);
