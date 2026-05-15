@@ -157,7 +157,7 @@ const tableHtml = `<div class="article-table-scroll" style="overflow-x:auto;marg
 <tbody>
 <tr>
 <td style="border:1px solid #d0d0d0;padding:11px 14px;vertical-align:top">Документирование этапов</td>
-<td style="border:1px solid #d0d0d0;padding:11px 14px;vertical-align:top">Зависит от исполнителя; часто гибко, но непредазуемо без вашего контроля</td>
+<td style="border:1px solid #d0d0d0;padding:11px 14px;vertical-align:top">Зависит от исполнителя; часто гибко, но непредсказуемо без вашего контроля</td>
 <td style="border:1px solid #d0d0d0;padding:11px 14px;vertical-align:top">Обычно сильнее: акты, регламенты, ответственные</td>
 <td style="border:1px solid #d0d0d0;padding:11px 14px;vertical-align:top">Нужно явно стыковать границы между командами</td>
 </tr>
