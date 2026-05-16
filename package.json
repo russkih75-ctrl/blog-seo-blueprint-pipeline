@@ -33,6 +33,7 @@
     "wp:sync-content-index": "node scripts/wp-sync-content-index.mjs",
     "wp:wordstat-queue-next": "node scripts/wp-wordstat-queue-next.mjs",
     "install:yadryshko-subagent": "node scripts/install-yadryshko-subagent.mjs",
+    "yadryshko:update-wordprais-core": "node scripts/yadryshko-update-wordprais-core.mjs",
     "mcp:tools-check": "node scripts/mcp-sse-tools-check.mjs",
     "automation:audit": "node scripts/automation-safety-audit.mjs",
     "automation:big-audit": "node scripts/automation-big-audit.mjs",

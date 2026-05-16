@@ -1,215 +1,846 @@
 {
-  "version": 1,
+  "version": 2,
   "targetSite": "https://wordprais.ru/",
   "blockedCanonicalTopicKeys": [
-    "wordpress разработка",
-    "wordpress elementor",
-    "разработка сайта на wordpress",
-    "elementor для wordpress конструктор"
+    "wordpress разработка сайта",
+    "wordpress заказать сайт",
+    "wordpress elementor"
   ],
   "meta": {
     "regionCode": 225,
     "regionLabel": "Россия",
-    "snapshotDate": "2026-05-14",
+    "snapshotDate": "2026-05-16",
     "source": "wordstat_mcp_kv",
     "device": "all",
-    "notes": "Ключи без брендовых мусорных формулировок (fortuna, novelit и т.п.) — см. excludedBrandedQueries."
+    "notes": "Семантическое ядро собрано через YADryshko workflow и MCP-KV Wordstat. Брендовые/мусорные запросы исключены из публикационной очереди."
   },
   "excludedBrandedQueries": [
     "seo продвижение сайтов seo fortuna",
-    "seo продвижение сайтов novelit"
+    "seo продвижение сайтов novelit",
+    "seo продвижение сайта seotica",
+    "продвижение сайта в яндексе seojazz",
+    "продвижение сайта в яндексе novelit",
+    "результат seo аудита сайта evenbox",
+    "результат seo аудита сайта evenbox ru",
+    "сайт инфоурок для воспитателей заказать статью",
+    "налоговый калькулятор на сайте фнс для ип",
+    "dora ai нейросеть для создания сайтов"
   ],
   "clusters": [
     {
       "id": "c_wp_commercial",
-      "titleRu": "WordPress: коммерция",
+      "titleRu": "WordPress: разработка и заказ сайта",
       "priority": 0,
       "draftLandingUrl": "/uslugi/wordpress-razrabotka/"
     },
     {
+      "id": "c_wp_setup",
+      "titleRu": "WordPress: установка, настройка и админка",
+      "priority": 1,
+      "draftLandingUrl": "/uslugi/nastrojka-wordpress/"
+    },
+    {
+      "id": "c_wp_performance",
+      "titleRu": "WordPress: скорость, кэш и Core Web Vitals",
+      "priority": 1,
+      "draftLandingUrl": "/uslugi/uskorenie-wordpress/"
+    },
+    {
+      "id": "c_wp_migration",
+      "titleRu": "WordPress: перенос, домен и хостинг",
+      "priority": 1,
+      "draftLandingUrl": "/uslugi/perenos-wordpress/"
+    },
+    {
+      "id": "c_wp_security",
+      "titleRu": "WordPress: безопасность, вирусы и восстановление",
+      "priority": 0,
+      "draftLandingUrl": "/uslugi/wordpress-bezopasnost-vosstanovlenie/"
+    },
+    {
+      "id": "c_wp_support",
+      "titleRu": "WordPress: поддержка и доработки",
+      "priority": 1,
+      "draftLandingUrl": "/uslugi/teh-podderzhka-wordpress/"
+    },
+    {
       "id": "c_plugins_themes",
-      "titleRu": "Плагины, темы, модули",
+      "titleRu": "WordPress: плагины, темы, Elementor",
       "priority": 1,
       "draftLandingUrl": "/uslugi/wordpress-plaginy-temy/"
     },
     {
       "id": "c_calculators",
-      "titleRu": "Калькуляторы для сайта",
+      "titleRu": "Калькуляторы и формы для сайта",
       "priority": 0,
       "draftLandingUrl": "/uslugi/kalkulyatory-dlya-sajta/"
     },
     {
       "id": "c_seo_wp",
-      "titleRu": "SEO и продвижение",
+      "titleRu": "SEO-продвижение сайта",
       "priority": 0,
       "draftLandingUrl": "/prodvizhenie/seo/"
     },
     {
-      "id": "c_support",
-      "titleRu": "Поддержка WordPress",
-      "priority": 2,
-      "draftLandingUrl": "/uslugi/teh-podderzhka-wordpress/"
+      "id": "c_yandex_seo",
+      "titleRu": "Продвижение в Яндексе",
+      "priority": 0,
+      "draftLandingUrl": "/prodvizhenie/yandex/"
     },
     {
-      "id": "c_content",
-      "titleRu": "Контент для сайта",
-      "priority": 1,
-      "draftLandingUrl": "/uslugi/kontent-dlya-sajta/"
+      "id": "c_seo_audit",
+      "titleRu": "SEO-аудит и технический аудит сайта",
+      "priority": 0,
+      "draftLandingUrl": "/prodvizhenie/seo-audit/"
     },
     {
       "id": "c_geo_ai",
-      "titleRu": "GEO и ИИ в поиске",
+      "titleRu": "GEO, AI-search и нейропоиск",
       "priority": 1,
-      "draftLandingUrl": "/yandex/"
+      "draftLandingUrl": "/yandex/nejropoisk-geo/"
+    },
+    {
+      "id": "c_content",
+      "titleRu": "Контент, статьи и наполнение сайта",
+      "priority": 1,
+      "draftLandingUrl": "/uslugi/kontent-dlya-sajta/"
     }
   ],
   "seeds": [
     {
-      "id": "ws_01",
+      "id": "ws_001",
       "phrase": "разработка сайта на wordpress",
       "wordstatStatus": "ok",
       "clusterId": "c_wp_commercial",
-      "queries": [{ "phrase": "разработка сайта на wordpress", "shows": 122 }]
-    },
-    {
-      "id": "ws_02",
-      "phrase": "wordpress разработка",
-      "wordstatStatus": "ok",
-      "clusterId": "c_wp_commercial",
       "queries": [
-        { "phrase": "разработка wordpress", "shows": 246 },
-        { "phrase": "разработка сайта на wordpress", "shows": 122 },
-        { "phrase": "wordpress плагины разработка", "shows": 27 },
-        { "phrase": "wordpress разработка темы", "shows": 20 },
-        { "phrase": "разработка сайтов wordpress cms", "shows": 17 }
+        {
+          "phrase": "разработка сайта на wordpress",
+          "shows": 137,
+          "kind": "top"
+        }
       ]
     },
     {
-      "id": "ws_03",
-      "phrase": "заказать сайт wordpress",
+      "id": "ws_002",
+      "phrase": "создание сайта на wordpress",
       "wordstatStatus": "ok",
       "clusterId": "c_wp_commercial",
-      "queries": [{ "phrase": "заказать сайт на wordpress", "shows": 59 }]
+      "queries": [
+        {
+          "phrase": "создание сайта на wordpress",
+          "shows": 470,
+          "kind": "top"
+        },
+        {
+          "phrase": "создание сайта на wordpress elementor",
+          "shows": 75,
+          "kind": "top"
+        },
+        {
+          "phrase": "создания сайта на wordpress с нуля",
+          "shows": 73,
+          "kind": "top"
+        },
+        {
+          "phrase": "создание сайтов на основе wordpress",
+          "shows": 41,
+          "kind": "top"
+        },
+        {
+          "phrase": "создание сайта на теме wordpress",
+          "shows": 13,
+          "kind": "top"
+        },
+        {
+          "phrase": "нейросеть для создания сайта на wordpress",
+          "shows": 12,
+          "kind": "top"
+        },
+        {
+          "phrase": "инструкция создания сайта на wordpress",
+          "shows": 12,
+          "kind": "top"
+        },
+        {
+          "phrase": "создание сайта на wordpress пошаговая",
+          "shows": 10,
+          "kind": "top"
+        },
+        {
+          "phrase": "создание сайта на wordpress пошаговая инструкция",
+          "shows": 10,
+          "kind": "top"
+        },
+        {
+          "phrase": "создание сайтов на wordpress цена",
+          "shows": 7,
+          "kind": "top"
+        },
+        {
+          "phrase": "создание и продвижение сайтов на wordpress",
+          "shows": 5,
+          "kind": "top"
+        }
+      ]
     },
     {
-      "id": "ws_04",
-      "phrase": "тема wordpress на заказ",
-      "wordstatStatus": "no_data",
-      "clusterId": "c_plugins_themes",
-      "queries": []
+      "id": "ws_003",
+      "phrase": "заказать сайт на wordpress",
+      "wordstatStatus": "ok",
+      "clusterId": "c_wp_commercial",
+      "queries": [
+        {
+          "phrase": "заказать сайт на wordpress",
+          "shows": 54,
+          "kind": "top"
+        },
+        {
+          "phrase": "сайт под ключ",
+          "shows": 5192,
+          "kind": "similar"
+        },
+        {
+          "phrase": "сколько стоит сделать сайт",
+          "shows": 1373,
+          "kind": "similar"
+        },
+        {
+          "phrase": "сколько стоит создать сайт",
+          "shows": 941,
+          "kind": "similar"
+        },
+        {
+          "phrase": "вордпресс создание сайта",
+          "shows": 468,
+          "kind": "similar"
+        }
+      ]
     },
     {
-      "id": "ws_05",
+      "id": "ws_004",
       "phrase": "seo продвижение сайта",
       "wordstatStatus": "ok",
       "clusterId": "c_seo_wp",
       "queries": [
-        { "phrase": "seo продвижение сайта", "shows": 8608 },
-        { "phrase": "seo продвижение сайта москва", "shows": 889 },
-        { "phrase": "seo оптимизация продвижение сайтов", "shows": 656 },
-        { "phrase": "seo продвижение сайта заказать", "shows": 652 },
-        { "phrase": "поисковое продвижение сайтов seo", "shows": 621 },
-        { "phrase": "seo продвижение сайтов цена", "shows": 480 },
-        { "phrase": "seo продвижение сайта услуги", "shows": 231 },
-        { "phrase": "seo продвижение сайта россия", "shows": 230 },
-        { "phrase": "seo продвижение сайта в яндекс", "shows": 228 }
+        {
+          "phrase": "seo продвижение сайта",
+          "shows": 8513,
+          "kind": "top"
+        },
+        {
+          "phrase": "seo продвижение сайта москва",
+          "shows": 874,
+          "kind": "top"
+        },
+        {
+          "phrase": "seo продвижение сайта заказать",
+          "shows": 667,
+          "kind": "top"
+        },
+        {
+          "phrase": "seo оптимизация продвижение сайтов",
+          "shows": 636,
+          "kind": "top"
+        },
+        {
+          "phrase": "поисковое продвижение сайта seo",
+          "shows": 616,
+          "kind": "top"
+        },
+        {
+          "phrase": "seo продвижение сайтов цена",
+          "shows": 487,
+          "kind": "top"
+        },
+        {
+          "phrase": "сео продвижение сайтов seo",
+          "shows": 287,
+          "kind": "top"
+        },
+        {
+          "phrase": "seo система продвижение сайтов",
+          "shows": 284,
+          "kind": "top"
+        },
+        {
+          "phrase": "seo продвижение раскрутка сайта",
+          "shows": 279,
+          "kind": "top"
+        },
+        {
+          "phrase": "seo ru продвижение сайтов",
+          "shows": 238,
+          "kind": "top"
+        },
+        {
+          "phrase": "seo продвижение сайта россия",
+          "shows": 234,
+          "kind": "top"
+        },
+        {
+          "phrase": "seo продвижение сайта услуги",
+          "shows": 229,
+          "kind": "top"
+        },
+        {
+          "phrase": "seo продвижение сайта в яндекс",
+          "shows": 220,
+          "kind": "top"
+        }
       ]
     },
     {
-      "id": "ws_06",
-      "phrase": "калькулятор для сайта заказать",
-      "wordstatStatus": "no_data",
-      "clusterId": "c_calculators",
-      "queries": []
-    },
-    {
-      "id": "ws_07",
-      "phrase": "модуль для wordpress",
+      "id": "ws_005",
+      "phrase": "продвижение сайта в яндексе",
       "wordstatStatus": "ok",
-      "clusterId": "c_plugins_themes",
-      "queries": [{ "phrase": "модуль для wordpress", "shows": 72 }]
+      "clusterId": "c_yandex_seo",
+      "queries": [
+        {
+          "phrase": "продвижение сайта в яндексе",
+          "shows": 1950,
+          "kind": "top"
+        },
+        {
+          "phrase": "продвижение сайта в топ яндекса",
+          "shows": 423,
+          "kind": "top"
+        },
+        {
+          "phrase": "продвижение сайтов в яндексе москва",
+          "shows": 300,
+          "kind": "top"
+        },
+        {
+          "phrase": "seo продвижение сайта в яндекс",
+          "shows": 220,
+          "kind": "top"
+        },
+        {
+          "phrase": "продвижение сайтов в 10 яндекс",
+          "shows": 191,
+          "kind": "top"
+        },
+        {
+          "phrase": "продвижение сайта в яндекс директ",
+          "shows": 189,
+          "kind": "top"
+        },
+        {
+          "phrase": "продвижение сайта в яндексе цена",
+          "shows": 166,
+          "kind": "top"
+        },
+        {
+          "phrase": "продвижение сайта в топ 10 яндекса",
+          "shows": 150,
+          "kind": "top"
+        },
+        {
+          "phrase": "поисковое продвижение сайта в яндекс",
+          "shows": 91,
+          "kind": "top"
+        },
+        {
+          "phrase": "продвижение сайта в системе яндекс",
+          "shows": 55,
+          "kind": "top"
+        },
+        {
+          "phrase": "продвижение сайта в поисковой системе яндекс",
+          "shows": 54,
+          "kind": "top"
+        },
+        {
+          "phrase": "заказать продвижение сайта в яндекс",
+          "shows": 53,
+          "kind": "top"
+        },
+        {
+          "phrase": "сео продвижение сайта в яндекс",
+          "shows": 50,
+          "kind": "top"
+        }
+      ]
     },
     {
-      "id": "ws_08",
+      "id": "ws_006",
+      "phrase": "seo аудит сайта",
+      "wordstatStatus": "ok",
+      "clusterId": "c_seo_audit",
+      "queries": [
+        {
+          "phrase": "seo аудит сайта",
+          "shows": 506,
+          "kind": "top"
+        },
+        {
+          "phrase": "бесплатный seo аудит сайта",
+          "shows": 262,
+          "kind": "top"
+        },
+        {
+          "phrase": "seo анализ сайта аудит",
+          "shows": 252,
+          "kind": "top"
+        },
+        {
+          "phrase": "seo аудит сайта технического seo аудита",
+          "shows": 54,
+          "kind": "top"
+        },
+        {
+          "phrase": "seo аудит сайта онлайн",
+          "shows": 33,
+          "kind": "top"
+        },
+        {
+          "phrase": "провести seo аудит сайта",
+          "shows": 19,
+          "kind": "top"
+        },
+        {
+          "phrase": "seo аудит сайта онлайн бесплатно",
+          "shows": 11,
+          "kind": "top"
+        },
+        {
+          "phrase": "аудит seo продвижение сайта",
+          "shows": 8,
+          "kind": "top"
+        },
+        {
+          "phrase": "технический аудит сайта на своем сервере seo",
+          "shows": 7,
+          "kind": "top"
+        }
+      ]
+    },
+    {
+      "id": "ws_007",
+      "phrase": "настройка wordpress",
+      "wordstatStatus": "ok",
+      "clusterId": "c_wp_setup",
+      "queries": [
+        {
+          "phrase": "настройка wordpress",
+          "shows": 658,
+          "kind": "top"
+        },
+        {
+          "phrase": "настройка сайта wordpress",
+          "shows": 116,
+          "kind": "top"
+        },
+        {
+          "phrase": "настройки темы wordpress",
+          "shows": 59,
+          "kind": "top"
+        },
+        {
+          "phrase": "настройки плагинов wordpress",
+          "shows": 57,
+          "kind": "top"
+        },
+        {
+          "phrase": "страница настроек wordpress",
+          "shows": 49,
+          "kind": "top"
+        },
+        {
+          "phrase": "wordpress установка настройка",
+          "shows": 48,
+          "kind": "top"
+        },
+        {
+          "phrase": "wordpress настройка сервера",
+          "shows": 30,
+          "kind": "top"
+        },
+        {
+          "phrase": "настройка seo wordpress",
+          "shows": 26,
+          "kind": "top"
+        },
+        {
+          "phrase": "smtp wordpress настройки",
+          "shows": 25,
+          "kind": "top"
+        },
+        {
+          "phrase": "wordpress настройки базы",
+          "shows": 22,
+          "kind": "top"
+        },
+        {
+          "phrase": "настройка woocommerce wordpress",
+          "shows": 22,
+          "kind": "top"
+        },
+        {
+          "phrase": "wp mail smtp wordpress настройка",
+          "shows": 21,
+          "kind": "top"
+        },
+        {
+          "phrase": "настройка wordpress для новичков",
+          "shows": 20,
+          "kind": "top"
+        },
+        {
+          "phrase": "wordpress настройка php",
+          "shows": 17,
+          "kind": "top"
+        },
+        {
+          "phrase": "htaccess wordpress настройка",
+          "shows": 14,
+          "kind": "top"
+        },
+        {
+          "phrase": "wordpress почта настройка",
+          "shows": 13,
+          "kind": "top"
+        }
+      ]
+    },
+    {
+      "id": "ws_008",
+      "phrase": "ускорение сайта wordpress",
+      "wordstatStatus": "ok",
+      "clusterId": "c_wp_performance",
+      "queries": [
+        {
+          "phrase": "ускорение сайта на wordpress",
+          "shows": 31,
+          "kind": "top"
+        },
+        {
+          "phrase": "плагин для ускорения сайта на wordpress",
+          "shows": 10,
+          "kind": "top"
+        }
+      ]
+    },
+    {
+      "id": "ws_009",
+      "phrase": "перенос сайта wordpress",
+      "wordstatStatus": "ok",
+      "clusterId": "c_wp_migration",
+      "queries": [
+        {
+          "phrase": "перенос сайта на wordpress",
+          "shows": 101,
+          "kind": "top"
+        },
+        {
+          "phrase": "перенос сайта wordpress на другой",
+          "shows": 46,
+          "kind": "top"
+        },
+        {
+          "phrase": "перенос сайта wordpress на хостинг",
+          "shows": 28,
+          "kind": "top"
+        },
+        {
+          "phrase": "перенос сайта на wordpress на домен",
+          "shows": 25,
+          "kind": "top"
+        },
+        {
+          "phrase": "перенос сайт wordpress на другой домен",
+          "shows": 22,
+          "kind": "top"
+        },
+        {
+          "phrase": "wordpress перенос сайта на другой хостинг",
+          "shows": 20,
+          "kind": "top"
+        }
+      ]
+    },
+    {
+      "id": "ws_010",
+      "phrase": "доработка сайта wordpress",
+      "wordstatStatus": "ok",
+      "clusterId": "c_wp_support",
+      "queries": [
+        {
+          "phrase": "доработка сайта на wordpress",
+          "shows": 45,
+          "kind": "top"
+        }
+      ]
+    },
+    {
+      "id": "ws_011",
+      "phrase": "поддержка сайта wordpress",
+      "wordstatStatus": "ok",
+      "clusterId": "c_wp_support",
+      "queries": [
+        {
+          "phrase": "поддержка сайтов wordpress",
+          "shows": 48,
+          "kind": "top"
+        },
+        {
+          "phrase": "техническая поддержка сайта wordpress",
+          "shows": 8,
+          "kind": "top"
+        }
+      ]
+    },
+    {
+      "id": "ws_012",
+      "phrase": "безопасность wordpress",
+      "wordstatStatus": "ok",
+      "clusterId": "c_wp_security",
+      "queries": [
+        {
+          "phrase": "безопасность wordpress",
+          "shows": 84,
+          "kind": "top"
+        },
+        {
+          "phrase": "безопасность сайта wordpress",
+          "shows": 21,
+          "kind": "top"
+        },
+        {
+          "phrase": "безопасность wordpress плагины",
+          "shows": 13,
+          "kind": "top"
+        },
+        {
+          "phrase": "wordpress книга по безопасности",
+          "shows": 6,
+          "kind": "top"
+        }
+      ]
+    },
+    {
+      "id": "ws_013",
+      "phrase": "wordpress вирусы",
+      "wordstatStatus": "ok",
+      "clusterId": "c_wp_security",
+      "queries": [
+        {
+          "phrase": "wordpress вирусы",
+          "shows": 30,
+          "kind": "top"
+        }
+      ]
+    },
+    {
+      "id": "ws_014",
       "phrase": "калькулятор для сайта",
       "wordstatStatus": "ok",
       "clusterId": "c_calculators",
       "queries": [
-        { "phrase": "калькулятор для сайта", "shows": 1939 },
-        { "phrase": "онлайн калькулятор для сайта", "shows": 622 },
-        { "phrase": "калькулятор для расчета сайта", "shows": 552 },
-        { "phrase": "калькулятор стоимости для сайта", "shows": 529 },
-        { "phrase": "разработка калькулятора для сайта", "shows": 52 },
-        { "phrase": "создать калькулятор для сайта", "shows": 45 },
-        { "phrase": "конструктор калькуляторов для сайта", "shows": 25 },
-        { "phrase": "создание калькуляторов для сайта", "shows": 23 }
+        {
+          "phrase": "калькулятор для сайта",
+          "shows": 1908,
+          "kind": "top"
+        },
+        {
+          "phrase": "онлайн калькулятор для сайта",
+          "shows": 614,
+          "kind": "top"
+        },
+        {
+          "phrase": "калькулятор для расчета сайта",
+          "shows": 541,
+          "kind": "top"
+        },
+        {
+          "phrase": "калькулятор стоимости для сайта",
+          "shows": 525,
+          "kind": "top"
+        },
+        {
+          "phrase": "калькуляторы для сайта бесплатно",
+          "shows": 92,
+          "kind": "top"
+        },
+        {
+          "phrase": "калькулятор для сайта скачать",
+          "shows": 57,
+          "kind": "top"
+        },
+        {
+          "phrase": "разработка калькулятора для сайта",
+          "shows": 45,
+          "kind": "top"
+        },
+        {
+          "phrase": "создать калькулятор для сайта",
+          "shows": 44,
+          "kind": "top"
+        },
+        {
+          "phrase": "калькулятор для расчета стоимости сайта",
+          "shows": 29,
+          "kind": "top"
+        },
+        {
+          "phrase": "создание калькуляторов для сайта",
+          "shows": 27,
+          "kind": "top"
+        },
+        {
+          "phrase": "код калькулятора для сайта",
+          "shows": 26,
+          "kind": "top"
+        },
+        {
+          "phrase": "конструктор калькуляторов для сайтов",
+          "shows": 25,
+          "kind": "top"
+        },
+        {
+          "phrase": "как сделать калькулятор для сайта",
+          "shows": 23,
+          "kind": "top"
+        },
+        {
+          "phrase": "калькулятор доставки для сайта",
+          "shows": 22,
+          "kind": "top"
+        },
+        {
+          "phrase": "калькулятор услуг для сайта",
+          "shows": 21,
+          "kind": "top"
+        }
       ]
     },
     {
-      "id": "ws_09",
-      "phrase": "техническая поддержка wordpress",
+      "id": "ws_015",
+      "phrase": "разработка плагина wordpress",
       "wordstatStatus": "ok",
-      "clusterId": "c_support",
-      "queries": [{ "phrase": "техническая поддержка сайта wordpress", "shows": 9 }]
-    },
-    {
-      "id": "ws_10",
-      "phrase": "нейросети и продвижение сайта",
-      "wordstatStatus": "no_data",
-      "clusterId": "c_geo_ai",
-      "queries": []
-    },
-    {
-      "id": "ws_11",
-      "phrase": "ai seo продвижение",
-      "wordstatStatus": "no_data",
-      "clusterId": "c_geo_ai",
-      "queries": []
-    },
-    {
-      "id": "ws_12",
-      "phrase": "кастомная тема wordpress",
-      "wordstatStatus": "no_data",
       "clusterId": "c_plugins_themes",
-      "queries": []
+      "queries": [
+        {
+          "phrase": "wordpress плагины разработка",
+          "shows": 26,
+          "kind": "top"
+        }
+      ]
     },
     {
-      "id": "ws_13",
-      "phrase": "оптимизация сайта под нейросеть",
+      "id": "ws_016",
+      "phrase": "нейросеть для создания сайта",
       "wordstatStatus": "ok",
       "clusterId": "c_geo_ai",
-      "queries": [{ "phrase": "оптимизация сайта под нейросети", "shows": 31 }]
+      "queries": [
+        {
+          "phrase": "нейросеть для создания сайтов",
+          "shows": 3139,
+          "kind": "top"
+        },
+        {
+          "phrase": "нейросеть для создания сайта бесплатно",
+          "shows": 865,
+          "kind": "top"
+        },
+        {
+          "phrase": "лучшая нейросеть для создания сайтов",
+          "shows": 133,
+          "kind": "top"
+        },
+        {
+          "phrase": "нейросеть для создания сайта на русском",
+          "shows": 92,
+          "kind": "top"
+        },
+        {
+          "phrase": "нейросеть для создания дизайна сайта",
+          "shows": 90,
+          "kind": "top"
+        },
+        {
+          "phrase": "ai нейросеть для создания сайта",
+          "shows": 85,
+          "kind": "top"
+        },
+        {
+          "phrase": "нейросеть для создания сайта с нуля",
+          "shows": 78,
+          "kind": "top"
+        },
+        {
+          "phrase": "нейросеть для создания сайтов с нуля бесплатно",
+          "shows": 67,
+          "kind": "top"
+        },
+        {
+          "phrase": "нейросеть для создания сайта онлайн",
+          "shows": 52,
+          "kind": "top"
+        }
+      ]
     },
     {
-      "id": "ws_14",
+      "id": "ws_017",
+      "phrase": "оптимизация сайта под нейросети",
+      "wordstatStatus": "ok",
+      "clusterId": "c_geo_ai",
+      "queries": [
+        {
+          "phrase": "оптимизация сайта под нейросети",
+          "shows": 31,
+          "kind": "top"
+        }
+      ]
+    },
+    {
+      "id": "ws_018",
+      "phrase": "наполнение сайта контентом",
+      "wordstatStatus": "ok",
+      "clusterId": "c_content",
+      "queries": [
+        {
+          "phrase": "наполнение сайта контентом",
+          "shows": 293,
+          "kind": "top"
+        },
+        {
+          "phrase": "наполнение сайта контентом работа",
+          "shows": 33,
+          "kind": "top"
+        },
+        {
+          "phrase": "контент менеджер наполнение сайта",
+          "shows": 13,
+          "kind": "top"
+        },
+        {
+          "phrase": "пошаговое наполнение сайта контентом",
+          "shows": 6,
+          "kind": "top"
+        }
+      ]
+    },
+    {
+      "id": "ws_019",
       "phrase": "статья для сайта заказать",
       "wordstatStatus": "ok",
       "clusterId": "c_content",
-      "queries": [{ "phrase": "заказать статью для сайта", "shows": 23 }]
-    },
-    {
-      "id": "ws_15",
-      "phrase": "создание сайта wordpress",
-      "wordstatStatus": "ok",
-      "clusterId": "c_wp_commercial",
       "queries": [
-        { "phrase": "создание сайта на wordpress", "shows": 493 },
-        { "phrase": "создание сайтов wordpress с нуля", "shows": 78 },
-        { "phrase": "wordpress создание сайта с elementor", "shows": 77 },
-        { "phrase": "создание сайтов на основе wordpress", "shows": 41 },
-        { "phrase": "wordpress создание сайта бесплатно", "shows": 37 },
-        { "phrase": "нейросеть для создания сайта на wordpress", "shows": 14 },
-        { "phrase": "создание и продвижение сайтов на wordpress", "shows": 5 },
-        { "phrase": "создание сайтов на wordpress цена", "shows": 6 }
+        {
+          "phrase": "заказать статью для сайта",
+          "shows": 26,
+          "kind": "top"
+        }
       ]
     },
     {
-      "id": "ws_16",
+      "id": "ws_020",
       "phrase": "__semantic_refill__",
       "wordstatStatus": "meta",
       "clusterId": "c_wp_commercial",
       "queries": [],
-      "notes": "Зарезервировано: сигнал завершения цикла — запуск субагента семантики (ЯДрышко) и обновление очереди."
+      "notes": "Сигнал завершения очереди: запустить YADryshko и обновить семантическое ядро."
     }
   ],
   "semanticRefill": {
