@@ -72,6 +72,7 @@ const findings = [
   check(cfg.hardGates?.mediaRequiredForPublish === true, "media_not_required", "blocker", cfg.hardGates?.mediaRequiredForPublish),
   check(cloud.includes("keywordCoverageOk") && publish.includes("keywordCoverageOk"), "keyword_coverage_gate_missing", "blocker", "cloud+publish"),
   check(cloud.includes("duplicateParagraphs") && publish.includes("duplicateParagraphs"), "duplicate_paragraph_gate_missing", "blocker", "cloud+publish"),
+  check(cloud.includes("cursorStepMaxAttempts") && cloud.includes("retryable") && cloud.includes("await sleep(delayMs)"), "cursor_step_retry_missing", "blocker", "src/run-workflow-cloud.ts"),
   check(queueScript.includes("canonicalTopicKey"), "canonical_topic_key_missing", "blocker", "scripts/wp-wordstat-queue-next.mjs"),
   check(Array.isArray(queue.pendingPhrasesNorm), "queue_pending_state_missing", "warning", "artifacts/wordstat-queue-cursor.json"),
   check(last.mode === "topic" || last.mode === "semantic_refill" || last.mode === undefined, "unexpected_last_queue_mode", "warning", last.mode),

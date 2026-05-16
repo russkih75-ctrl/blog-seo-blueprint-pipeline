@@ -87,6 +87,23 @@ const ART = path.join(ROOT, "artifacts");
 
 let loggedLocalRuntime = false;
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function cursorStepMaxAttempts(): number {
+  const n = Number(process.env.CURSOR_STEP_MAX_ATTEMPTS ?? "3");
+  return Number.isFinite(n) ? Math.min(6, Math.max(1, Math.floor(n))) : 3;
+}
+
+function cursorStepRetryDelayMs(attempt: number): number {
+  const base = Number(process.env.CURSOR_STEP_RETRY_DELAY_MS ?? "30000");
+  const safeBase = Number.isFinite(base)
+    ? Math.min(300000, Math.max(1000, base))
+    : 30000;
+  return Math.min(300000, safeBase * Math.max(1, attempt));
+}
+
 function useLocalAgent(): boolean {
   return (
     String(process.env.WORKFLOW_RUNTIME ?? "").toLowerCase() === "local"
@@ -363,23 +380,39 @@ async function cursorCloud(prompt: string, label: string): Promise<string> {
 
   attachMcpServers(opts);
 
-  console.error(`[step] ▶ ${label}`);
-  try {
-    const result = await Agent.prompt(prompt, opts);
-    if (result.status === "error") {
-      console.error(`[step] ✖ ${label} статус=${result.status}`);
-      process.exitCode = 2;
+  const maxAttempts = cursorStepMaxAttempts();
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    console.error(`[step] ${label} attempt=${attempt}/${maxAttempts}`);
+    try {
+      const result = await Agent.prompt(prompt, opts);
+      if (result.status === "error") {
+        console.error(`[step] ${label} status=${result.status}`);
+        if (attempt < maxAttempts) {
+          const delayMs = cursorStepRetryDelayMs(attempt);
+          console.error(`[step] retry ${label} after status=error in ${delayMs}ms`);
+          await sleep(delayMs);
+          continue;
+        }
+        process.exitCode = 2;
+      }
+      return (result.result ?? "").trimEnd();
+    } catch (e) {
+      if (e instanceof CursorAgentError) {
+        console.error(
+          `[step] CursorAgentError ${label}: ${e.message} retryable=${e.isRetryable}`,
+        );
+        if (e.isRetryable && attempt < maxAttempts) {
+          const delayMs = cursorStepRetryDelayMs(attempt);
+          console.error(`[step] retry ${label} after CursorAgentError in ${delayMs}ms`);
+          await sleep(delayMs);
+          continue;
+        }
+        process.exit(1);
+      }
+      throw e;
     }
-    return (result.result ?? "").trimEnd();
-  } catch (e) {
-    if (e instanceof CursorAgentError) {
-      console.error(
-        `[step] CursorAgentError ${label}: ${e.message} retryable=${e.isRetryable}`,
-      );
-      process.exit(1);
-    }
-    throw e;
   }
+  throw new Error(`Cursor step exhausted retries: ${label}`);
 }
 
 export function extractSection(full: string, headingWithHash: string): string {
