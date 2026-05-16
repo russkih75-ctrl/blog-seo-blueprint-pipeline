@@ -50,9 +50,33 @@ function canonicalTopicKey(text, words = 4) {
     .split(/\s+/)
     .filter(Boolean);
   const tokenSet = new Set(tokens);
-  if (tokenSet.has("wordpress") && tokenSet.has("разработка")) return "wordpress разработка";
+  if (tokenSet.has("wordpress") && tokenSet.has("заказать")) return "wordpress заказать сайт";
+  if (tokenSet.has("wordpress") && (tokenSet.has("разработка") || tokenSet.has("разработать"))) return "wordpress разработка сайта";
   if (tokenSet.has("wordpress") && tokenSet.has("elementor")) return "wordpress elementor";
-  const weak = new Set(["сайт", "сайта", "сайтов", "на", "для", "под", "и", "в", "с", "по"]);
+  if (tokenSet.has("wordpress") && (tokenSet.has("взлом") || tokenSet.has("восстановление") || tokenSet.has("чистка"))) return "wordpress взлом восстановление";
+  const weak = new Set([
+    "сайт",
+    "сайта",
+    "сайтов",
+    "сайты",
+    "на",
+    "для",
+    "под",
+    "без",
+    "как",
+    "что",
+    "это",
+    "или",
+    "и",
+    "в",
+    "с",
+    "по",
+    "до",
+    "от",
+    "при",
+    "2026",
+    "году",
+  ]);
   const strongTokens = tokens.filter((token) => !weak.has(token));
   return (strongTokens.length ? strongTokens : tokens).slice(0, Math.max(2, words)).join(" ");
 }
