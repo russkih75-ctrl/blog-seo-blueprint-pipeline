@@ -32,8 +32,12 @@ function readJson(file) {
 mkdirSync(ART, { recursive: true });
 
 const startedAt = new Date().toISOString();
+run("npm.cmd", ["run", "wp:sync-content-index"]);
+
+const reusePending =
+  String(process.env.WORDSTAT_REUSE_PENDING ?? "").toLowerCase() === "true";
 const existingLast = existsSync(LAST_OUT_PATH) ? readJson(LAST_OUT_PATH) : null;
-if (existingLast?.mode !== "topic" || !String(existingLast?.phrase ?? "").trim()) {
+if (!reusePending || existingLast?.mode !== "topic" || !String(existingLast?.phrase ?? "").trim()) {
   run("npm.cmd", ["run", "wp:wordstat-queue-next"]);
 }
 if (!existsSync(LAST_OUT_PATH)) {

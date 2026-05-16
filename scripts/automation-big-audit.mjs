@@ -52,9 +52,12 @@ const contentIndex = readJson("artifacts/content-index.json", { entries: [] });
 const cloud = readText("src/run-workflow-cloud.ts");
 const publish = readText("scripts/wp-publish-streamable.mjs");
 const queueScript = readText("scripts/wp-wordstat-queue-next.mjs");
+const workflowNext = readText("scripts/workflow-wordstat-next.mjs");
+const syncScript = readText("scripts/wp-sync-content-index.mjs");
 
 const localChecks = [
   runCheck("node_check_workflow_wordstat_next", "node", ["--check", "scripts/workflow-wordstat-next.mjs"]),
+  runCheck("node_check_wp_sync_content_index", "node", ["--check", "scripts/wp-sync-content-index.mjs"]),
   runCheck("node_check_wp_publish_streamable", "node", ["--check", "scripts/wp-publish-streamable.mjs"]),
   runCheck("typecheck", "npm.cmd", ["run", "typecheck"]),
   runCheck("build", "npm.cmd", ["run", "build"]),
@@ -63,6 +66,7 @@ const localChecks = [
 
 const findings = [
   check(Boolean(pkg.scripts?.["workflow:wordstat-next"]), "missing_wordstat_next_entrypoint", "blocker", "package.json"),
+  check(Boolean(pkg.scripts?.["wp:sync-content-index"]), "missing_wp_sync_content_index_script", "blocker", "package.json"),
   check(Boolean(pkg.scripts?.["automation:big-audit"]), "missing_big_audit_script", "blocker", "package.json"),
   check((cfg.subagentSystem?.subagents ?? []).length >= 13, "subagent_system_too_small", "blocker", cfg.subagentSystem?.subagents?.length ?? 0),
   check(cfg.requiredSupervisor?.id === "content-structure-director", "director_not_configured", "blocker", cfg.requiredSupervisor ?? null),
@@ -73,6 +77,8 @@ const findings = [
   check(cloud.includes("keywordCoverageOk") && publish.includes("keywordCoverageOk"), "keyword_coverage_gate_missing", "blocker", "cloud+publish"),
   check(cloud.includes("duplicateParagraphs") && publish.includes("duplicateParagraphs"), "duplicate_paragraph_gate_missing", "blocker", "cloud+publish"),
   check(cloud.includes("cursorStepMaxAttempts") && cloud.includes("retryable") && cloud.includes("await sleep(delayMs)"), "cursor_step_retry_missing", "blocker", "src/run-workflow-cloud.ts"),
+  check(workflowNext.includes("wp:sync-content-index") && workflowNext.includes("WORDSTAT_REUSE_PENDING"), "workflow_does_not_sync_wordpress_before_queue", "blocker", "scripts/workflow-wordstat-next.mjs"),
+  check(syncScript.includes("/wp-json/wp/v2/posts") && syncScript.includes("canonicalTopicKey"), "wp_sync_index_missing_public_posts_or_topic_key", "blocker", "scripts/wp-sync-content-index.mjs"),
   check(queueScript.includes("canonicalTopicKey"), "canonical_topic_key_missing", "blocker", "scripts/wp-wordstat-queue-next.mjs"),
   check(Array.isArray(queue.pendingPhrasesNorm), "queue_pending_state_missing", "warning", "artifacts/wordstat-queue-cursor.json"),
   check(last.mode === "topic" || last.mode === "semantic_refill" || last.mode === undefined, "unexpected_last_queue_mode", "warning", last.mode),

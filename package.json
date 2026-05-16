@@ -30,6 +30,7 @@
     "wp:publish-mcp-state": "node --import tsx src/wp-publish-from-state-mcp.ts",
     "wp:publish-streamable": "node scripts/wp-publish-streamable.mjs",
     "wp:delete-post": "node scripts/wp-delete-post-streamable.mjs",
+    "wp:sync-content-index": "node scripts/wp-sync-content-index.mjs",
     "wp:wordstat-queue-next": "node scripts/wp-wordstat-queue-next.mjs",
     "install:yadryshko-subagent": "node scripts/install-yadryshko-subagent.mjs",
     "mcp:tools-check": "node scripts/mcp-sse-tools-check.mjs",
