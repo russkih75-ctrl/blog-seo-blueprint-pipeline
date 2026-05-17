@@ -106,6 +106,1007 @@
       "draftLandingUrl": "/uslugi/kontent-dlya-sajta/"
     }
   ],
+  "keywordQueue": [
+    {
+      "id": "kw_0001",
+      "phrase": "разработка сайта на wordpress",
+      "seedId": "ws_001",
+      "seedPhrase": "разработка сайта на wordpress",
+      "clusterId": "c_wp_commercial",
+      "shows": 137,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0002",
+      "phrase": "создание сайта на wordpress",
+      "seedId": "ws_002",
+      "seedPhrase": "создание сайта на wordpress",
+      "clusterId": "c_wp_commercial",
+      "shows": 470,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0003",
+      "phrase": "создание сайта на wordpress elementor",
+      "seedId": "ws_002",
+      "seedPhrase": "создание сайта на wordpress",
+      "clusterId": "c_wp_commercial",
+      "shows": 75,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0004",
+      "phrase": "создания сайта на wordpress с нуля",
+      "seedId": "ws_002",
+      "seedPhrase": "создание сайта на wordpress",
+      "clusterId": "c_wp_commercial",
+      "shows": 73,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0005",
+      "phrase": "создание сайтов на основе wordpress",
+      "seedId": "ws_002",
+      "seedPhrase": "создание сайта на wordpress",
+      "clusterId": "c_wp_commercial",
+      "shows": 41,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0006",
+      "phrase": "создание сайта на теме wordpress",
+      "seedId": "ws_002",
+      "seedPhrase": "создание сайта на wordpress",
+      "clusterId": "c_wp_commercial",
+      "shows": 13,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0007",
+      "phrase": "нейросеть для создания сайта на wordpress",
+      "seedId": "ws_002",
+      "seedPhrase": "создание сайта на wordpress",
+      "clusterId": "c_wp_commercial",
+      "shows": 12,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0008",
+      "phrase": "инструкция создания сайта на wordpress",
+      "seedId": "ws_002",
+      "seedPhrase": "создание сайта на wordpress",
+      "clusterId": "c_wp_commercial",
+      "shows": 12,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0009",
+      "phrase": "создание сайта на wordpress пошаговая",
+      "seedId": "ws_002",
+      "seedPhrase": "создание сайта на wordpress",
+      "clusterId": "c_wp_commercial",
+      "shows": 10,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0010",
+      "phrase": "создание сайта на wordpress пошаговая инструкция",
+      "seedId": "ws_002",
+      "seedPhrase": "создание сайта на wordpress",
+      "clusterId": "c_wp_commercial",
+      "shows": 10,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0011",
+      "phrase": "создание сайтов на wordpress цена",
+      "seedId": "ws_002",
+      "seedPhrase": "создание сайта на wordpress",
+      "clusterId": "c_wp_commercial",
+      "shows": 7,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0012",
+      "phrase": "создание и продвижение сайтов на wordpress",
+      "seedId": "ws_002",
+      "seedPhrase": "создание сайта на wordpress",
+      "clusterId": "c_wp_commercial",
+      "shows": 5,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0013",
+      "phrase": "заказать сайт на wordpress",
+      "seedId": "ws_003",
+      "seedPhrase": "заказать сайт на wordpress",
+      "clusterId": "c_wp_commercial",
+      "shows": 54,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0014",
+      "phrase": "seo продвижение сайта",
+      "seedId": "ws_004",
+      "seedPhrase": "seo продвижение сайта",
+      "clusterId": "c_seo_wp",
+      "shows": 8513,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0015",
+      "phrase": "seo продвижение сайта москва",
+      "seedId": "ws_004",
+      "seedPhrase": "seo продвижение сайта",
+      "clusterId": "c_seo_wp",
+      "shows": 874,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0016",
+      "phrase": "seo продвижение сайта заказать",
+      "seedId": "ws_004",
+      "seedPhrase": "seo продвижение сайта",
+      "clusterId": "c_seo_wp",
+      "shows": 667,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0017",
+      "phrase": "seo оптимизация продвижение сайтов",
+      "seedId": "ws_004",
+      "seedPhrase": "seo продвижение сайта",
+      "clusterId": "c_seo_wp",
+      "shows": 636,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0018",
+      "phrase": "поисковое продвижение сайта seo",
+      "seedId": "ws_004",
+      "seedPhrase": "seo продвижение сайта",
+      "clusterId": "c_seo_wp",
+      "shows": 616,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0019",
+      "phrase": "seo продвижение сайтов цена",
+      "seedId": "ws_004",
+      "seedPhrase": "seo продвижение сайта",
+      "clusterId": "c_seo_wp",
+      "shows": 487,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0020",
+      "phrase": "сео продвижение сайтов seo",
+      "seedId": "ws_004",
+      "seedPhrase": "seo продвижение сайта",
+      "clusterId": "c_seo_wp",
+      "shows": 287,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0021",
+      "phrase": "seo система продвижение сайтов",
+      "seedId": "ws_004",
+      "seedPhrase": "seo продвижение сайта",
+      "clusterId": "c_seo_wp",
+      "shows": 284,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0022",
+      "phrase": "seo продвижение раскрутка сайта",
+      "seedId": "ws_004",
+      "seedPhrase": "seo продвижение сайта",
+      "clusterId": "c_seo_wp",
+      "shows": 279,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0023",
+      "phrase": "seo ru продвижение сайтов",
+      "seedId": "ws_004",
+      "seedPhrase": "seo продвижение сайта",
+      "clusterId": "c_seo_wp",
+      "shows": 238,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0024",
+      "phrase": "seo продвижение сайта россия",
+      "seedId": "ws_004",
+      "seedPhrase": "seo продвижение сайта",
+      "clusterId": "c_seo_wp",
+      "shows": 234,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0025",
+      "phrase": "seo продвижение сайта услуги",
+      "seedId": "ws_004",
+      "seedPhrase": "seo продвижение сайта",
+      "clusterId": "c_seo_wp",
+      "shows": 229,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0026",
+      "phrase": "seo продвижение сайта в яндекс",
+      "seedId": "ws_004",
+      "seedPhrase": "seo продвижение сайта",
+      "clusterId": "c_seo_wp",
+      "shows": 220,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0027",
+      "phrase": "продвижение сайта в яндексе",
+      "seedId": "ws_005",
+      "seedPhrase": "продвижение сайта в яндексе",
+      "clusterId": "c_yandex_seo",
+      "shows": 1950,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0028",
+      "phrase": "продвижение сайта в топ яндекса",
+      "seedId": "ws_005",
+      "seedPhrase": "продвижение сайта в яндексе",
+      "clusterId": "c_yandex_seo",
+      "shows": 423,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0029",
+      "phrase": "продвижение сайтов в яндексе москва",
+      "seedId": "ws_005",
+      "seedPhrase": "продвижение сайта в яндексе",
+      "clusterId": "c_yandex_seo",
+      "shows": 300,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0030",
+      "phrase": "seo продвижение сайта в яндекс",
+      "seedId": "ws_005",
+      "seedPhrase": "продвижение сайта в яндексе",
+      "clusterId": "c_yandex_seo",
+      "shows": 220,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0031",
+      "phrase": "продвижение сайтов в 10 яндекс",
+      "seedId": "ws_005",
+      "seedPhrase": "продвижение сайта в яндексе",
+      "clusterId": "c_yandex_seo",
+      "shows": 191,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0032",
+      "phrase": "продвижение сайта в яндекс директ",
+      "seedId": "ws_005",
+      "seedPhrase": "продвижение сайта в яндексе",
+      "clusterId": "c_yandex_seo",
+      "shows": 189,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0033",
+      "phrase": "продвижение сайта в яндексе цена",
+      "seedId": "ws_005",
+      "seedPhrase": "продвижение сайта в яндексе",
+      "clusterId": "c_yandex_seo",
+      "shows": 166,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0034",
+      "phrase": "продвижение сайта в топ 10 яндекса",
+      "seedId": "ws_005",
+      "seedPhrase": "продвижение сайта в яндексе",
+      "clusterId": "c_yandex_seo",
+      "shows": 150,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0035",
+      "phrase": "поисковое продвижение сайта в яндекс",
+      "seedId": "ws_005",
+      "seedPhrase": "продвижение сайта в яндексе",
+      "clusterId": "c_yandex_seo",
+      "shows": 91,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0036",
+      "phrase": "продвижение сайта в системе яндекс",
+      "seedId": "ws_005",
+      "seedPhrase": "продвижение сайта в яндексе",
+      "clusterId": "c_yandex_seo",
+      "shows": 55,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0037",
+      "phrase": "продвижение сайта в поисковой системе яндекс",
+      "seedId": "ws_005",
+      "seedPhrase": "продвижение сайта в яндексе",
+      "clusterId": "c_yandex_seo",
+      "shows": 54,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0038",
+      "phrase": "заказать продвижение сайта в яндекс",
+      "seedId": "ws_005",
+      "seedPhrase": "продвижение сайта в яндексе",
+      "clusterId": "c_yandex_seo",
+      "shows": 53,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0039",
+      "phrase": "сео продвижение сайта в яндекс",
+      "seedId": "ws_005",
+      "seedPhrase": "продвижение сайта в яндексе",
+      "clusterId": "c_yandex_seo",
+      "shows": 50,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0040",
+      "phrase": "seo аудит сайта",
+      "seedId": "ws_006",
+      "seedPhrase": "seo аудит сайта",
+      "clusterId": "c_seo_audit",
+      "shows": 506,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0041",
+      "phrase": "бесплатный seo аудит сайта",
+      "seedId": "ws_006",
+      "seedPhrase": "seo аудит сайта",
+      "clusterId": "c_seo_audit",
+      "shows": 262,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0042",
+      "phrase": "seo анализ сайта аудит",
+      "seedId": "ws_006",
+      "seedPhrase": "seo аудит сайта",
+      "clusterId": "c_seo_audit",
+      "shows": 252,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0043",
+      "phrase": "seo аудит сайта технического seo аудита",
+      "seedId": "ws_006",
+      "seedPhrase": "seo аудит сайта",
+      "clusterId": "c_seo_audit",
+      "shows": 54,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0044",
+      "phrase": "seo аудит сайта онлайн",
+      "seedId": "ws_006",
+      "seedPhrase": "seo аудит сайта",
+      "clusterId": "c_seo_audit",
+      "shows": 33,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0045",
+      "phrase": "провести seo аудит сайта",
+      "seedId": "ws_006",
+      "seedPhrase": "seo аудит сайта",
+      "clusterId": "c_seo_audit",
+      "shows": 19,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0046",
+      "phrase": "seo аудит сайта онлайн бесплатно",
+      "seedId": "ws_006",
+      "seedPhrase": "seo аудит сайта",
+      "clusterId": "c_seo_audit",
+      "shows": 11,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0047",
+      "phrase": "аудит seo продвижение сайта",
+      "seedId": "ws_006",
+      "seedPhrase": "seo аудит сайта",
+      "clusterId": "c_seo_audit",
+      "shows": 8,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0048",
+      "phrase": "технический аудит сайта на своем сервере seo",
+      "seedId": "ws_006",
+      "seedPhrase": "seo аудит сайта",
+      "clusterId": "c_seo_audit",
+      "shows": 7,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0049",
+      "phrase": "настройка wordpress",
+      "seedId": "ws_007",
+      "seedPhrase": "настройка wordpress",
+      "clusterId": "c_wp_setup",
+      "shows": 658,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0050",
+      "phrase": "настройка сайта wordpress",
+      "seedId": "ws_007",
+      "seedPhrase": "настройка wordpress",
+      "clusterId": "c_wp_setup",
+      "shows": 116,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0051",
+      "phrase": "настройки темы wordpress",
+      "seedId": "ws_007",
+      "seedPhrase": "настройка wordpress",
+      "clusterId": "c_wp_setup",
+      "shows": 59,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0052",
+      "phrase": "настройки плагинов wordpress",
+      "seedId": "ws_007",
+      "seedPhrase": "настройка wordpress",
+      "clusterId": "c_wp_setup",
+      "shows": 57,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0053",
+      "phrase": "страница настроек wordpress",
+      "seedId": "ws_007",
+      "seedPhrase": "настройка wordpress",
+      "clusterId": "c_wp_setup",
+      "shows": 49,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0054",
+      "phrase": "wordpress установка настройка",
+      "seedId": "ws_007",
+      "seedPhrase": "настройка wordpress",
+      "clusterId": "c_wp_setup",
+      "shows": 48,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0055",
+      "phrase": "wordpress настройка сервера",
+      "seedId": "ws_007",
+      "seedPhrase": "настройка wordpress",
+      "clusterId": "c_wp_setup",
+      "shows": 30,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0056",
+      "phrase": "настройка seo wordpress",
+      "seedId": "ws_007",
+      "seedPhrase": "настройка wordpress",
+      "clusterId": "c_wp_setup",
+      "shows": 26,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0057",
+      "phrase": "smtp wordpress настройки",
+      "seedId": "ws_007",
+      "seedPhrase": "настройка wordpress",
+      "clusterId": "c_wp_setup",
+      "shows": 25,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0058",
+      "phrase": "wordpress настройки базы",
+      "seedId": "ws_007",
+      "seedPhrase": "настройка wordpress",
+      "clusterId": "c_wp_setup",
+      "shows": 22,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0059",
+      "phrase": "настройка woocommerce wordpress",
+      "seedId": "ws_007",
+      "seedPhrase": "настройка wordpress",
+      "clusterId": "c_wp_setup",
+      "shows": 22,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0060",
+      "phrase": "wp mail smtp wordpress настройка",
+      "seedId": "ws_007",
+      "seedPhrase": "настройка wordpress",
+      "clusterId": "c_wp_setup",
+      "shows": 21,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0061",
+      "phrase": "настройка wordpress для новичков",
+      "seedId": "ws_007",
+      "seedPhrase": "настройка wordpress",
+      "clusterId": "c_wp_setup",
+      "shows": 20,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0062",
+      "phrase": "wordpress настройка php",
+      "seedId": "ws_007",
+      "seedPhrase": "настройка wordpress",
+      "clusterId": "c_wp_setup",
+      "shows": 17,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0063",
+      "phrase": "htaccess wordpress настройка",
+      "seedId": "ws_007",
+      "seedPhrase": "настройка wordpress",
+      "clusterId": "c_wp_setup",
+      "shows": 14,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0064",
+      "phrase": "wordpress почта настройка",
+      "seedId": "ws_007",
+      "seedPhrase": "настройка wordpress",
+      "clusterId": "c_wp_setup",
+      "shows": 13,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0065",
+      "phrase": "ускорение сайта на wordpress",
+      "seedId": "ws_008",
+      "seedPhrase": "ускорение сайта wordpress",
+      "clusterId": "c_wp_performance",
+      "shows": 31,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0066",
+      "phrase": "плагин для ускорения сайта на wordpress",
+      "seedId": "ws_008",
+      "seedPhrase": "ускорение сайта wordpress",
+      "clusterId": "c_wp_performance",
+      "shows": 10,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0067",
+      "phrase": "перенос сайта на wordpress",
+      "seedId": "ws_009",
+      "seedPhrase": "перенос сайта wordpress",
+      "clusterId": "c_wp_migration",
+      "shows": 101,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0068",
+      "phrase": "перенос сайта wordpress на другой",
+      "seedId": "ws_009",
+      "seedPhrase": "перенос сайта wordpress",
+      "clusterId": "c_wp_migration",
+      "shows": 46,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0069",
+      "phrase": "перенос сайта wordpress на хостинг",
+      "seedId": "ws_009",
+      "seedPhrase": "перенос сайта wordpress",
+      "clusterId": "c_wp_migration",
+      "shows": 28,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0070",
+      "phrase": "перенос сайта на wordpress на домен",
+      "seedId": "ws_009",
+      "seedPhrase": "перенос сайта wordpress",
+      "clusterId": "c_wp_migration",
+      "shows": 25,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0071",
+      "phrase": "перенос сайт wordpress на другой домен",
+      "seedId": "ws_009",
+      "seedPhrase": "перенос сайта wordpress",
+      "clusterId": "c_wp_migration",
+      "shows": 22,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0072",
+      "phrase": "wordpress перенос сайта на другой хостинг",
+      "seedId": "ws_009",
+      "seedPhrase": "перенос сайта wordpress",
+      "clusterId": "c_wp_migration",
+      "shows": 20,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0073",
+      "phrase": "доработка сайта на wordpress",
+      "seedId": "ws_010",
+      "seedPhrase": "доработка сайта wordpress",
+      "clusterId": "c_wp_support",
+      "shows": 45,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0074",
+      "phrase": "поддержка сайтов wordpress",
+      "seedId": "ws_011",
+      "seedPhrase": "поддержка сайта wordpress",
+      "clusterId": "c_wp_support",
+      "shows": 48,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0075",
+      "phrase": "техническая поддержка сайта wordpress",
+      "seedId": "ws_011",
+      "seedPhrase": "поддержка сайта wordpress",
+      "clusterId": "c_wp_support",
+      "shows": 8,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0076",
+      "phrase": "безопасность wordpress",
+      "seedId": "ws_012",
+      "seedPhrase": "безопасность wordpress",
+      "clusterId": "c_wp_security",
+      "shows": 84,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0077",
+      "phrase": "безопасность сайта wordpress",
+      "seedId": "ws_012",
+      "seedPhrase": "безопасность wordpress",
+      "clusterId": "c_wp_security",
+      "shows": 21,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0078",
+      "phrase": "безопасность wordpress плагины",
+      "seedId": "ws_012",
+      "seedPhrase": "безопасность wordpress",
+      "clusterId": "c_wp_security",
+      "shows": 13,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0079",
+      "phrase": "wordpress книга по безопасности",
+      "seedId": "ws_012",
+      "seedPhrase": "безопасность wordpress",
+      "clusterId": "c_wp_security",
+      "shows": 6,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0080",
+      "phrase": "wordpress вирусы",
+      "seedId": "ws_013",
+      "seedPhrase": "wordpress вирусы",
+      "clusterId": "c_wp_security",
+      "shows": 30,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0081",
+      "phrase": "калькулятор для сайта",
+      "seedId": "ws_014",
+      "seedPhrase": "калькулятор для сайта",
+      "clusterId": "c_calculators",
+      "shows": 1908,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0082",
+      "phrase": "онлайн калькулятор для сайта",
+      "seedId": "ws_014",
+      "seedPhrase": "калькулятор для сайта",
+      "clusterId": "c_calculators",
+      "shows": 614,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0083",
+      "phrase": "калькулятор для расчета сайта",
+      "seedId": "ws_014",
+      "seedPhrase": "калькулятор для сайта",
+      "clusterId": "c_calculators",
+      "shows": 541,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0084",
+      "phrase": "калькулятор стоимости для сайта",
+      "seedId": "ws_014",
+      "seedPhrase": "калькулятор для сайта",
+      "clusterId": "c_calculators",
+      "shows": 525,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0085",
+      "phrase": "калькуляторы для сайта бесплатно",
+      "seedId": "ws_014",
+      "seedPhrase": "калькулятор для сайта",
+      "clusterId": "c_calculators",
+      "shows": 92,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0086",
+      "phrase": "калькулятор для сайта скачать",
+      "seedId": "ws_014",
+      "seedPhrase": "калькулятор для сайта",
+      "clusterId": "c_calculators",
+      "shows": 57,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0087",
+      "phrase": "разработка калькулятора для сайта",
+      "seedId": "ws_014",
+      "seedPhrase": "калькулятор для сайта",
+      "clusterId": "c_calculators",
+      "shows": 45,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0088",
+      "phrase": "создать калькулятор для сайта",
+      "seedId": "ws_014",
+      "seedPhrase": "калькулятор для сайта",
+      "clusterId": "c_calculators",
+      "shows": 44,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0089",
+      "phrase": "калькулятор для расчета стоимости сайта",
+      "seedId": "ws_014",
+      "seedPhrase": "калькулятор для сайта",
+      "clusterId": "c_calculators",
+      "shows": 29,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0090",
+      "phrase": "создание калькуляторов для сайта",
+      "seedId": "ws_014",
+      "seedPhrase": "калькулятор для сайта",
+      "clusterId": "c_calculators",
+      "shows": 27,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0091",
+      "phrase": "код калькулятора для сайта",
+      "seedId": "ws_014",
+      "seedPhrase": "калькулятор для сайта",
+      "clusterId": "c_calculators",
+      "shows": 26,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0092",
+      "phrase": "конструктор калькуляторов для сайтов",
+      "seedId": "ws_014",
+      "seedPhrase": "калькулятор для сайта",
+      "clusterId": "c_calculators",
+      "shows": 25,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0093",
+      "phrase": "как сделать калькулятор для сайта",
+      "seedId": "ws_014",
+      "seedPhrase": "калькулятор для сайта",
+      "clusterId": "c_calculators",
+      "shows": 23,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0094",
+      "phrase": "калькулятор доставки для сайта",
+      "seedId": "ws_014",
+      "seedPhrase": "калькулятор для сайта",
+      "clusterId": "c_calculators",
+      "shows": 22,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0095",
+      "phrase": "калькулятор услуг для сайта",
+      "seedId": "ws_014",
+      "seedPhrase": "калькулятор для сайта",
+      "clusterId": "c_calculators",
+      "shows": 21,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0096",
+      "phrase": "wordpress плагины разработка",
+      "seedId": "ws_015",
+      "seedPhrase": "разработка плагина wordpress",
+      "clusterId": "c_plugins_themes",
+      "shows": 26,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0097",
+      "phrase": "нейросеть для создания сайтов",
+      "seedId": "ws_016",
+      "seedPhrase": "нейросеть для создания сайта",
+      "clusterId": "c_geo_ai",
+      "shows": 3139,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0098",
+      "phrase": "нейросеть для создания сайта бесплатно",
+      "seedId": "ws_016",
+      "seedPhrase": "нейросеть для создания сайта",
+      "clusterId": "c_geo_ai",
+      "shows": 865,
+      "priority": "P0"
+    },
+    {
+      "id": "kw_0099",
+      "phrase": "лучшая нейросеть для создания сайтов",
+      "seedId": "ws_016",
+      "seedPhrase": "нейросеть для создания сайта",
+      "clusterId": "c_geo_ai",
+      "shows": 133,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0100",
+      "phrase": "нейросеть для создания сайта на русском",
+      "seedId": "ws_016",
+      "seedPhrase": "нейросеть для создания сайта",
+      "clusterId": "c_geo_ai",
+      "shows": 92,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0101",
+      "phrase": "нейросеть для создания дизайна сайта",
+      "seedId": "ws_016",
+      "seedPhrase": "нейросеть для создания сайта",
+      "clusterId": "c_geo_ai",
+      "shows": 90,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0102",
+      "phrase": "ai нейросеть для создания сайта",
+      "seedId": "ws_016",
+      "seedPhrase": "нейросеть для создания сайта",
+      "clusterId": "c_geo_ai",
+      "shows": 85,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0103",
+      "phrase": "нейросеть для создания сайта с нуля",
+      "seedId": "ws_016",
+      "seedPhrase": "нейросеть для создания сайта",
+      "clusterId": "c_geo_ai",
+      "shows": 78,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0104",
+      "phrase": "нейросеть для создания сайтов с нуля бесплатно",
+      "seedId": "ws_016",
+      "seedPhrase": "нейросеть для создания сайта",
+      "clusterId": "c_geo_ai",
+      "shows": 67,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0105",
+      "phrase": "нейросеть для создания сайта онлайн",
+      "seedId": "ws_016",
+      "seedPhrase": "нейросеть для создания сайта",
+      "clusterId": "c_geo_ai",
+      "shows": 52,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0106",
+      "phrase": "оптимизация сайта под нейросети",
+      "seedId": "ws_017",
+      "seedPhrase": "оптимизация сайта под нейросети",
+      "clusterId": "c_geo_ai",
+      "shows": 31,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0107",
+      "phrase": "наполнение сайта контентом",
+      "seedId": "ws_018",
+      "seedPhrase": "наполнение сайта контентом",
+      "clusterId": "c_content",
+      "shows": 293,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0108",
+      "phrase": "наполнение сайта контентом работа",
+      "seedId": "ws_018",
+      "seedPhrase": "наполнение сайта контентом",
+      "clusterId": "c_content",
+      "shows": 33,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0109",
+      "phrase": "контент менеджер наполнение сайта",
+      "seedId": "ws_018",
+      "seedPhrase": "наполнение сайта контентом",
+      "clusterId": "c_content",
+      "shows": 13,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0110",
+      "phrase": "пошаговое наполнение сайта контентом",
+      "seedId": "ws_018",
+      "seedPhrase": "наполнение сайта контентом",
+      "clusterId": "c_content",
+      "shows": 6,
+      "priority": "P1"
+    },
+    {
+      "id": "kw_0111",
+      "phrase": "заказать статью для сайта",
+      "seedId": "ws_019",
+      "seedPhrase": "статья для сайта заказать",
+      "clusterId": "c_content",
+      "shows": 26,
+      "priority": "P1"
+    }
+  ],
   "seeds": [
     {
       "id": "ws_001",

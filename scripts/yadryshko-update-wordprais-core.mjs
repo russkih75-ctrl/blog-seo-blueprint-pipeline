@@ -588,6 +588,15 @@ function createRunFiles() {
 }
 
 function updateAutomationConfig() {
+  const keywordQueue = includedQueries().filter((row) => row.kind === "top").map((row, index) => ({
+    id: `kw_${String(index + 1).padStart(4, "0")}`,
+    phrase: row.query,
+    seedId: row.seed.id,
+    seedPhrase: row.seed.phrase,
+    clusterId: row.cluster.id,
+    shows: row.shows,
+    priority: priorityFrom(row.cluster, row.shows),
+  }));
   const cfg = {
     version: 2,
     targetSite: "https://wordprais.ru/",
@@ -600,6 +609,7 @@ function updateAutomationConfig() {
       priority,
       draftLandingUrl,
     })),
+    keywordQueue,
     seeds,
     semanticRefill: {
       repositoryUrl: "https://github.com/Horosheff/yadryshko-semantic-core-subagent",

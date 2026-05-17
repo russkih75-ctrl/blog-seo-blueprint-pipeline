@@ -19,6 +19,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ART = path.join(ROOT, "artifacts");
 const CONTENT_INDEX_PATH = path.join(ART, "content-index.json");
 const CURSOR_PATH = path.join(ART, "wordstat-queue-cursor.json");
+const SIMPLE_QUEUE_PATH = path.join(ART, "simple-keyword-queue.json");
 
 config({ path: path.join(ROOT, ".env") });
 const mcpKvDotenvRel = process.env.MCP_KV_DOTENV_PATH?.trim();
@@ -113,6 +114,21 @@ function pushUnique(values, norm, max = 400) {
     .filter(Boolean);
   if (norm && !out.includes(norm)) out.push(norm);
   return out.slice(-max);
+}
+
+function syncSimpleKeywordQueue(norm, processed, now) {
+  if (!norm) return;
+  const queue = readJsonSafe(SIMPLE_QUEUE_PATH, null);
+  if (!queue || typeof queue !== "object") return;
+  queue.reservedPhrasesNorm = pushUnique(queue.reservedPhrasesNorm ?? [], norm, 2000);
+  if (processed) {
+    queue.processedPhrasesNorm = pushUnique(queue.processedPhrasesNorm ?? [], norm, 2000);
+    queue.processedAtByNorm = {
+      ...(queue.processedAtByNorm ?? {}),
+      [norm]: now,
+    };
+  }
+  writeJsonAtomic(SIMPLE_QUEUE_PATH, queue);
 }
 
 function syncDurableKeywordState({
@@ -211,6 +227,8 @@ function syncDurableKeywordState({
       writeJsonAtomic(CURSOR_PATH, cursor);
     }
   }
+
+  syncSimpleKeywordQueue(norm, processed, now);
 
   return {
     keywordState: processed ? "processed" : "pending",
