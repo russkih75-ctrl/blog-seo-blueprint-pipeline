@@ -14,6 +14,14 @@
 
 ---
 
+## Ветка Git (важно для синхронизации)
+
+Активная автоматизация в аккаунте Cursor сейчас использует ветку **`cursor/mcp-streamable-wp-publish-0243`**: в ней собраны актуальные правки WP/streamable, очереди Wordstat и шаблоны из `.cursor/automations/`.
+
+После того как эти изменения попадут в **`main`** через merge, в UI автоматизации имеет смысл переключить поле **Branch** на **`main`**, чтобы не зависеть от долгоживущей feature-ветки — до тех пор оставляйте **`cursor/mcp-streamable-wp-publish-0243`**.
+
+---
+
 ## Поля в интерфейсе Cursor
 
 **Название (пример):** `Вордпресс статьи — Wordstat 3h`
@@ -21,7 +29,7 @@
 **Триггер:** в списке триггеров выберите **Scheduled** → пункт **Every…** (как в меню создания автоматизации) → задайте интервал **3 hours**. Альтернатива: **Custom (cron)** — например `0 */3 * * *` (уточните часовой пояс в подсказках Cursor).
 
 **Репозиторий:** `russkih75-ctrl/blog-seo-blueprint-pipeline`  
-**Ветка:** рабочая ветка с актуальными скриптами (например `main` или ваша feature-ветка после merge).
+**Ветка:** **`cursor/mcp-streamable-wp-publish-0243`** (текущая production), либо **`main`** после merge и ручного переключения в UI.
 
 **Окружение (Environment):** включите установку зависимостей для этого репозитория (**enabled** в настройках Cloud Agent для репо), чтобы выполнялись `npm ci` / сборка. Секреты (**MCP_KV_HTTP_URL**, ключи WordPress через MCP, при необходимости **CURSOR_**/Cloud — только то, что вы уже задаёте в [Cloud Agents setup](https://cursor.com/docs/cloud-agent/setup)) добавьте в дашборде Cursor для этого репозитория; в промпт их не вставляйте.
 
@@ -50,12 +58,17 @@
 4) Если mode === "topic":
    Используй taskRu как основное ТЗ пользователя. Дальше строго следуй цепочке в prompts/wordpress-articles/MASTER_PROMPT.md (фазы A–J) и prompts/wordpress-articles/HTML_STRUCTURE_WORDPRAIS.md, config/wordpress-articles.json.
    Перед финальной фиксацией SEO выполни отдельный проход по skill duplicate-title-meta-guardian (уникальность seoTitle, meta description, slug относительно artifacts/content-index.json и при доступности — wordpress_search_posts). Затем duplicate-guardian по тексту статьи.
-   Сгенерируй обложку 16:9 и баннер 21:9 через MCP nano_* и залей в WordPress (wordpress_upload_media / featured), как в NANO_WORDPRESS_STUDIO.md.
+
+   МЕДИА И ПУБЛИКАЦИЯ — ЕДИНОЕ ПРАВИЛО (без исключений «можно без медиа» для нового материала):
+   • Для НОВОЙ публикации (новый пост в прод): не считай задачу выполненной и не запускай финальный publish-сценарий, пока нет ОБОИХ постоянных URL в медиатеке WordPress (или эквивалентных постоянных URL сайта): обложка (featured) 16:9 и горизонтальный баннер 21:9. Оба должны быть реально загружены и привязаны к посту (wordpress_upload_media / featured и т.д., см. NANO_WORDPRESS_STUDIO.md).
+   • Для ОБНОВЛЕНИЯ уже существующего поста: если у поста уже есть валидные существующие featured 16:9 и баннер 21:9 с постоянными WP/media URL, можно переиспользовать их без новой генерации, но обязательно отрази это в media-result.json (в каталоге run или artifacts): например reused=true, источники URL, соотношения сторон — чтобы аудит был воспроизводимым.
+   • Если генерация или загрузка не дали оба валидных ресурса — остановись до публикации, зафиксируй причину в media-result.json, не вызывай сценарий публикации «вслепую».
+
    Заполни artifacts/pipeline-state.json (seoTitle, metaDescription, articleHtml, метаданные изображений при наличии).
 
-5) Публикация npm-цепочкой после готового pipeline-state:
+5) Публикация npm-цепочкой только когда медиа-правило выше выполнено и pipeline-state готов:
    npm run scenario:wordpress-articles-with-nano
-   Если по политике нужна только публикация без nano — npm run scenario:wordpress-articles.
+   Если по политике нужна только публикация без nano — npm run scenario:wordpress-articles (но только если медиа уже соответствует правилу шага 4).
    При уже опубликованном URL и блокировке дубликата см. WP_PUBLISH_FORCE в README (не включай без причины).
 
 6) В конце кратко отчитайся: seedId, phrase, режим mode, ссылка на пост если есть, ошибки MCP/npm.

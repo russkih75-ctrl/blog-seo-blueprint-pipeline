@@ -4,6 +4,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+/** Только stdout JSON «как при обычном запуске», без записи state/last-out (диагностика в Telegram). */
+const PEEK_QUEUE =
+  process.argv.includes("--peek") ||
+  process.env.WORDSTAT_QUEUE_NEXT_PEEK === "1";
 const ART = path.join(ROOT, "artifacts");
 const CONFIG_PATH = path.join(ROOT, "config", "wordprais-wordstat-automation.json");
 const CONTENT_INDEX_PATH = path.join(ART, "content-index.json");
@@ -136,7 +141,7 @@ function buildTaskRu(config, item, cluster) {
 }
 
 function main() {
-  mkdirSync(ART, { recursive: true });
+  if (!PEEK_QUEUE) mkdirSync(ART, { recursive: true });
   const config = readJsonSafe(CONFIG_PATH, null);
   if (!config) throw new Error(`Missing config: ${CONFIG_PATH}`);
   const clustersById = new Map((config.clusters ?? []).map((cluster) => [cluster.id, cluster]));
@@ -178,23 +183,27 @@ function main() {
         "Плоский список ключевых слов исчерпан или все ключи уже зарезервированы/опубликованы. Запусти YADryshko и обнови keywordQueue.",
       configPath: path.relative(ROOT, CONFIG_PATH),
     };
-    writeJsonAtomic(LAST_OUT_PATH, { ...out, generatedAt: new Date().toISOString() });
-    process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
+    const stamp = new Date().toISOString();
+    if (!PEEK_QUEUE)
+      writeJsonAtomic(LAST_OUT_PATH, { ...out, generatedAt: stamp });
+    process.stdout.write(`${JSON.stringify({ ...out, generatedAt: stamp, peek: PEEK_QUEUE }, null, 2)}\n`);
     return;
   }
 
   const norm = normalize(picked.phrase);
   const now = new Date().toISOString();
-  state.reservedPhrasesNorm = pushUnique(state.reservedPhrasesNorm ?? [], norm);
-  state.lastReservedAt = now;
-  state.lastReserved = {
-    id: picked.id,
-    phrase: picked.phrase,
-    seedId: picked.seedId,
-    clusterId: picked.clusterId,
-    reservedAt: now,
-  };
-  writeJsonAtomic(STATE_PATH, state);
+  if (!PEEK_QUEUE) {
+    state.reservedPhrasesNorm = pushUnique(state.reservedPhrasesNorm ?? [], norm);
+    state.lastReservedAt = now;
+    state.lastReserved = {
+      id: picked.id,
+      phrase: picked.phrase,
+      seedId: picked.seedId,
+      clusterId: picked.clusterId,
+      reservedAt: now,
+    };
+    writeJsonAtomic(STATE_PATH, state);
+  }
 
   const cluster = clustersById.get(picked.clusterId);
   const out = {
@@ -211,8 +220,8 @@ function main() {
     taskRu: buildTaskRu(config, picked, cluster),
     configPath: path.relative(ROOT, CONFIG_PATH),
   };
-  writeJsonAtomic(LAST_OUT_PATH, { ...out, generatedAt: now });
-  process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
+  if (!PEEK_QUEUE) writeJsonAtomic(LAST_OUT_PATH, { ...out, generatedAt: now });
+  process.stdout.write(`${JSON.stringify({ ...out, generatedAt: now, peek: PEEK_QUEUE }, null, 2)}\n`);
 }
 
 main();

@@ -44,13 +44,29 @@ node scripts/start-workflow-bg.mjs "Тема статьи"
 
 ## Telegram-бот → локальный Cursor Agent
 
-Бот пересылает текст в **локальный** агент `@cursor/sdk` (`Agent.local.cwd` = `WORKSPACE_ROOT`), без Cloud Agent. Сессии: один `agentId` на `chat_id`, файл **`.telegram-agent-sessions.json`** в корне workspace (в `.gitignore`). Пока задача выполняется, в чате **одно** служебное сообщение с текстовым прогресс-баром: оно **редактируется**, а после ответа **удаляется**.
+Бот пересылает **только обычный текст** (без `/`) в **локальный** агент `@cursor/sdk` (`Agent.local.cwd` = `WORKSPACE_ROOT`). Команды меню **не** запускают агента. Сессии: один `agentId` на `chat_id`, файл **`.telegram-agent-sessions.json`** в корне workspace (в `.gitignore`). Пока задача выполняется, в чате **одно** служебное сообщение с прогресс-баром: после ответа оно **удаляется**.
 
-### Настройка
+### Настройка владельца (owner setup)
 
-1. Скопируйте **`.env.example` → `.env`**, задайте как минимум: **`CURSOR_API_KEY`**, **`TELEGRAM_BOT_TOKEN`**, **`CURSOR_MODEL`**. При необходимости **`WORKSPACE_ROOT`** (абсолютный путь к клону репозитория на сервере).
-2. Опционально: **`TELEGRAM_ALLOWED_CHAT_IDS`** (через запятую), **`TELEGRAM_AGENT_PERSONALITY`** / **`TELEGRAM_AGENT_PERSONALITY_FILE`**, **`BOT_TIMEZONE`** (IANA), **`CONTEXT7_API_KEY`** (stdio MCP context7). Чтобы у локального агента были те же инструменты **mcp-kv**, что и у пайплайна, задайте **`MCP_KV_HTTP_URL`** (SSE или HTTP из ЛК [mcp-kv.ru](https://mcp-kv.ru/)), при необходимости **`MCP_KV_HTTP_BEARER`**, либо общий **`MCP_KV_DOTENV_PATH=.env.mcp.local`** — бот подхватывает конфиг так же, как `run-workflow-cloud`. Если URL не в `.env`, можно положить сервер в **`~/.cursor/mcp.json`** (ключ `mcp-kv`): URL подставится автоматически.
-3. Сборка и запуск:
+1. **Где секреты.** Для **Cursor Automations / Cloud Agent** ключи задаются в **дашборде Cursor** (Secrets / Environment репозитория) — они **не** подставляются автоматически в файл `.env` на диске. Для **локального** `npm run bot` нужны те же **имена** переменных в **`.env`** (или в окружении процесса / `--env-file` у Docker).
+
+   **Если секреты уже заданы в Cursor UI** и нужен runtime бота в облаке: создайте автоматизацию по шаблону **`.cursor/automations/telegram-bot-owner-runtime.md`** (или эквивалентный Cloud job): агент выполняет `npm ci` / `npm run build` / `npm run bot` в среде, где переменные уже инжектированы из UI — **в репозиторий значения не копируются**. Локальный `.env` нужен только для запуска **`npm run bot` на своей машине**.
+
+2. **`TELEGRAM_ALLOWED_CHAT_IDS` обязателен для работы агента.** Пока переменная пустая, бот в режиме **начальной настройки**: доступны `/whoami`, `/menu`, `/status`, диагностика очереди (`/queue_status`, `/queue_next` с `--peek`) и подсказки; **агент, расписания и смена очереди без предпросмотра** отключены для всех.
+
+3. **Узнать свой chat_id — см. ниже «Как узнать chat_id».** После этого добавьте число в `TELEGRAM_ALLOWED_CHAT_IDS` и перезапустите процесс бота.
+
+### Как узнать chat_id
+
+1. Запустите бота (локально `npm run bot` или автоматизацию Cursor по шаблону `.cursor/automations/telegram-bot-owner-runtime.md`).
+2. В Telegram откройте чат с ботом и отправьте **`/whoami`** (или кнопку **«Мой chat_id»** на клавиатуре после **`/start`**).
+3. Скопируйте число **`chat_id`** из ответа.
+4. Вставьте его в **`TELEGRAM_ALLOWED_CHAT_IDS`** в **Cursor UI → Secrets / Environment** или в локальный **`.env`** (не коммитьте).
+5. Перезапустите бота или задание автоматизации / Cloud.
+
+4. **Проверка окружения без секретов:** `npm run bot:env-check` — только имена переменных и статус (задано / пусто / нет в окружении), плюс режим списка чатов.
+
+5. Сборка и запуск:
 
 ```bash
 npm install
@@ -58,18 +74,44 @@ npm run build
 npm run bot
 ```
 
-Команды в чате: **`/start`**, **`/help`**, **`/reset`**. Если persona в `.env` изменилась, а в сессии старый хеш — в лог пишется предупреждение; при странном поведении выполните **`/reset`**.
+При отсутствии **`TELEGRAM_BOT_TOKEN`** процесс завершится с **кратким** сообщением (без stack trace). **`CURSOR_API_KEY`** нужен для пересылки обычного текста агенту: без него диагностика и **`/whoami`** всё равно доступны после запуска с токеном.
+
+6. **Фон, pid и логи (без утечки секретов в консоль):**
+
+```bash
+npm run bot:start    # npm run build + фоновый node dist/telegram-bot.js, pid → artifacts/telegram-bot.pid
+npm run bot:status
+npm run bot:stop     # SIGTERM по pid из файла
+```
+
+Лог: **`artifacts/telegram-bot.log`**. Альтернатива вручную: `nohup npm run bot >> artifacts/telegram-bot.log 2>&1 & echo $! > artifacts/telegram-bot.pid`. Не коммитьте `.env` и логи с чувствительными данными.
+
+### Переменные (.env)
+
+См. **`.env.example`**. Кратко:
+
+- Чтобы процесс бота поднимался: **`TELEGRAM_BOT_TOKEN`**. Чтобы обычный текст уходил агенту: **`CURSOR_API_KEY`**. **`CURSOR_MODEL`** — из примера или свой (по умолчанию в коде задан разумный fallback).
+- **`WORKSPACE_ROOT`** — если пусто: используется **`/workspace`** при наличии каталога, иначе **`process.cwd()`**.
+- **`BOT_TIMEZONE`** — по умолчанию **`Europe/Moscow`** в префиксе задач агента.
+- **`TELEGRAM_ALLOWED_CHAT_IDS`** — whitelist владельца (см. выше).
+
+Опционально: **`TELEGRAM_AGENT_PERSONALITY`**, **`CONTEXT7_API_KEY`**, **`MCP_KV_HTTP_URL`** / bearer или **`MCP_KV_DOTENV_PATH=.env.mcp.local`**, либо **`~/.cursor/mcp.json`** (`mcp-kv`) для подстановки URL.
+
+Команды в чате: **`/start`** (клавиатура), **`/menu`**, **`/help`**, **`/status`**, **`/whoami`**, **`/sessions`**, **`/new_agent`**, **`/reset`**, **`/automations`**, **`/queue_status`**, **`/queue_next`** (peek), расписания (**`/schedule_*`**). Если persona в `.env` изменилась — при странном поведении **`/reset`** или **`/new_agent`**.
 
 ### Расписание в Telegram
 
 Расписания хранятся локально в **`.telegram-schedules.json`** (не коммитится).
 
-- **`/schedule`** — текущий интервал и время следующего запуска.
+- **`/schedule`** / **`/schedule_list`** — текущий интервал и время следующего запуска.
 - **`/schedule_every 30m`** / **`3h`** / **`1d`** — повтор (от 15 минут до 7 суток).
-- **`/schedule_off`** — выключить автозапуски в этом чате.
-- В одном сообщении с задачей можно написать, например: *«…публикация раз в 3 часа»* — шаблон текста сохранится для следующих запусков.
+- **`/schedule_queue_every`** — каждый запуск новая тема из очереди Wordstat (полный прогон через агента при включённом allowlist).
+- **`/schedule_off`** / **`/schedule_stop`** — выключить автозапуски в этом чате.
+- В одном сообщении с задачей можно написать, например: *«…публикация раз в 3 часа»* — шаблон сохранится для следующих запусков.
 
-Плановый запуск выполняет **ту же цепочку Cursor**, что и обычное сообщение (одно статус-сообщение с полосой прогресса, затем ответ). Публикация в прод по-прежнему только при **`CONTENT_PUBLISH_MODE=publish`** или **`--publish`** у CLI.
+Плановый запуск выполняет **ту же цепочку Cursor**, что и обычное сообщение. В режиме **bootstrap** тики расписания **не** запускают агента (время следующего запуска отодвигается). Публикация в прод по-прежнему только при **`CONTENT_PUBLISH_MODE=publish`** или **`--publish`** у CLI.
+
+**Очередь Wordstat:** `npm run wp:wordstat-queue-next` — обычный запуск (может зарезервировать ключ). Для предпросмотра без записи state: **`node scripts/wp-wordstat-queue-next.mjs --peek`** (используется командой **`/queue_next`** в боте).
 
 ### Docker (опционально)
 
@@ -112,6 +154,10 @@ npm run scenario:wordpress-articles
 В Telegram: **`/schedule_queue_every 3h`** — каждые 3 часа новая тема из этой очереди (бот подставляет **`taskRu`** автоматически). Обычное **`/schedule_every`** повторяет один и тот же сохранённый текст и сбрасывает режим очереди.
 
 **Cursor Automations** ([cursor.com/automations](https://cursor.com/automations)): автоматизацию нужно создать в аккаунте Cursor (веб-UI); в репозитории лежит готовый шаблон промпта и настройки триггера — **`.cursor/automations/wordpress-articles-wordstat-3h.md`** (обзор: **`.cursor/automations/README.md`**).
+
+**Ветка для production:** активная автоматизация «Вордпресс статьи — Wordstat 3h» должна указывать на **`cursor/mcp-streamable-wp-publish-0243`**, пока соответствующие правки не смёржены в **`main`**. После merge переключите **Branch** в UI автоматизации на **`main`**, чтобы не зависеть от feature-ветки.
+
+Проверка **публичного** URL поста без WordPress-секретов: **`npm run wp:verify-published -- '<https-URL-страницы>'`** (или переменная **`WP_VERIFY_PUBLISHED_URL`**).
 
 Опционально: **`WORDSTAT_AUTOMATION_CONFIG`** — путь к своей копии JSON-конфига очереди.
 
