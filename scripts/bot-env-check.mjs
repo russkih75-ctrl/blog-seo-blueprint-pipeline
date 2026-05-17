@@ -45,8 +45,7 @@ function workspaceRootResolved() {
 function statusRu(name) {
   const s = status(name);
   if (s === "set") return "задано";
-  if (s === "empty") return "пусто";
-  return "нет в окружении";
+  return "пусто";
 }
 
 const allowRaw = process.env.TELEGRAM_ALLOWED_CHAT_IDS?.trim();

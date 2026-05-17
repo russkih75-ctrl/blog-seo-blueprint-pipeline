@@ -783,7 +783,7 @@ function startTypingLoopApi(api: Api, chatId: number): () => void {
 }
 
 const MSG_NO_CURSOR_API_KEY =
-  "<b>Не задан</b> <code>CURSOR_API_KEY</code>. Добавьте ключ в Cursor → Secrets / Environment или в локальный <code>.env</code> и перезапустите бота. Диагностика (<code>/whoami</code>, очередь) работает только с токеном Telegram.";
+  "<b>Не задан</b> <code>CURSOR_API_KEY</code>. Добавьте ключ в Cursor → Secrets / Environment или в локальный <code>.env</code> и перезапустите бота.\n\nКоманды бота и предпросмотр очереди (<code>/whoami</code>, <code>/queue_next</code> и т.д.) работают только с <code>TELEGRAM_BOT_TOKEN</code>. Чтобы отправить <i>обычный текст</i> в Cursor Agent, нужен и <code>CURSOR_API_KEY</code>.";
 
 async function executeAgentJob(params: {
   chatIdStr: string;
@@ -981,7 +981,7 @@ function runWordstatQueuePeek(): string {
     });
     if (r.status !== 0) {
       return (
-        `Скрипт очереди завершился с кодом ${r.status}. Проверьте локально: npm run wp:wordstat-queue-next`
+        `Скрипт очереди завершился с кодом ${r.status}. Проверьте локально: node scripts/wp-wordstat-queue-next.mjs --peek`
       );
     }
     const raw = (r.stdout ?? "").trim();

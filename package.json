@@ -19,6 +19,7 @@
     "bot:stop": "node scripts/bot-daemon.mjs stop",
     "bot:status": "node scripts/bot-daemon.mjs status",
     "bot:env-check": "node scripts/bot-env-check.mjs",
+    "bot:sanity": "node scripts/bot-sanity-check.mjs",
     "content:run": "node dist/content-factory/run-content-factory.js",
     "content:check": "node dist/content-factory/run-content-factory.js --check-only",
     "content:indexnow": "node dist/content-factory/run-content-factory.js --indexnow-only",
