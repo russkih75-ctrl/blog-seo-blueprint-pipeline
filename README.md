@@ -44,7 +44,7 @@ node scripts/start-workflow-bg.mjs "Тема статьи"
 
 ## Telegram-бот → локальный Cursor Agent
 
-Бот пересылает **только обычный текст** (без `/`) в **локальный** агент `@cursor/sdk` (`Agent.local.cwd` = `WORKSPACE_ROOT`). Команды меню **не** запускают агента. Сессии: один `agentId` на `chat_id`, файл **`.telegram-agent-sessions.json`** в корне workspace (в `.gitignore`). Пока задача выполняется, в чате **одно** служебное сообщение с прогресс-баром: после ответа оно **удаляется**.
+Бот пересылает **только обычный текст** (без `/`) в **локальный** агент `@cursor/sdk` (`Agent.local.cwd` = `WORKSPACE_ROOT`). Команды меню **не** запускают агента. Сессии: один `agentId` на `chat_id`, файл **`.telegram-agent-sessions.json`** в корне workspace (в `.gitignore`). **Режим агента** (Ask / Plan / Agent) хранится в **`.telegram-bot-chat-modes.json`** (тоже в `.gitignore`). Пока задача выполняется, в чате **одно** служебное сообщение с прогресс-баром: после ответа оно **удаляется**.
 
 ### Настройка владельца (owner setup)
 
@@ -68,7 +68,7 @@ node scripts/start-workflow-bg.mjs "Тема статьи"
 
 - **Проверка окружения без секретов:** `npm run bot:env-check` — только имена переменных и статус **«задано»** или **«пусто»** (значения не печатаются), плюс режим списка чатов.
 
-- **Очередь Wordstat без резерва ключа:** `npm run bot:sanity` — вызывает `wp-wordstat-queue-next` с `--peek` и проверяет, что в JSON есть `peek: true`.
+- **Очередь Wordstat без резерва ключа и смоук бота:** `npm run bot:sanity` — `wp-wordstat-queue-next --peek` (`peek: true` в JSON), проверка маркеров в собранном `dist/telegram-bot.js`, нормализация текстовых триггеров публикации/остановки.
 
 - **Сборка и запуск:**
 
@@ -101,7 +101,21 @@ npm run bot:stop     # SIGTERM по pid из файла
 
 Опционально: **`TELEGRAM_AGENT_PERSONALITY`**, **`CONTEXT7_API_KEY`**, **`MCP_KV_HTTP_URL`** / bearer или **`MCP_KV_DOTENV_PATH=.env.mcp.local`**, либо **`~/.cursor/mcp.json`** (`mcp-kv`) для подстановки URL.
 
-Команды в чате: **`/start`** (клавиатура), **`/menu`**, **`/help`**, **`/status`**, **`/whoami`**, **`/sessions`**, **`/new_agent`**, **`/reset`**, **`/automations`**, **`/queue_status`**, **`/queue_next`** (peek), расписания (**`/schedule_*`**). Если persona в `.env` изменилась — при странном поведении **`/reset`** или **`/new_agent`**.
+Команды в чате: **`/start`** (клавиатура), **`/menu`**, **`/help`**, **`/status`**, **`/whoami`**, режимы **`/ask`**, **`/plan`**, **`/agent`** (и **`/mode_*`**), **`/sessions`**, **`/new_agent`**, **`/reset`**, **`/automations`**, **`/queue_status`**, **`/queue_next`** (peek), **`/publish_article`** → подтверждение **`/publish_article_confirm`**, **`/stop_automation`**, расписания (**`/schedule_*`**). Кнопки «Опубликовать статью» и «Остановить автоматизацию» дублируют часть команд.
+
+### Режимы Ask / Plan / Agent
+
+- **`/ask`** или **`/mode_ask`** — ответы и диагностика **без** правок файлов и без терминальных команд в префиксе задачи (ограничения задаются промптом; разрешение инструментов зависит от Cursor Agent).
+- **`/plan`** или **`/mode_plan`** — только **план шагов**, без выполнения.
+- **`/agent`** или **`/mode_agent`** — прежняя автономная логика с префиксом автономности из кода.
+
+### Публикация статьи и остановка автоматизации
+
+- Фразы **«опубликуй статью»** / **«опубликовать статью»** (отдельным сообщением), кнопка **«Опубликовать статью»** или **`/publish_article`** — только инструкция и напоминание про **`/publish_article_confirm`**.
+- **`/publish_article_confirm`** (владелец): сначала **`npm run wp:wordstat-queue-next`** (резерв ключа), затем одно задание агенту по регламенту «Вордпресс статьи» и **`npm run scenario:wordpress-articles-with-nano`** когда контент готов (как в шаблоне автоматизации). Не запускается, если уже идёт другая задача агента.
+- **`/stop_automation`** или кнопка **«Остановить автоматизацию»**: выключаются **локальные** расписания этого чата в боте; **Cursor Cloud Automations** из Telegram не отключаются — бот присылает ссылку на страницу автоматизации в UI.
+
+Если persona в `.env` изменилась — при странном поведении **`/reset`** или **`/new_agent`**.
 
 ### Расписание в Telegram
 

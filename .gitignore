@@ -6,6 +6,7 @@ dist/
 !.env.mcp.example
 .telegram-agent-sessions.json
 .telegram-schedules.json
+.telegram-bot-chat-modes.json
 artifacts/
 vendor/
 *.log

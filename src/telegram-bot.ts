@@ -115,6 +115,13 @@ const WORKSPACE_ROOT = resolveWorkspaceRoot();
 
 const SESSIONS_PATH = path.join(WORKSPACE_ROOT, ".telegram-agent-sessions.json");
 const SCHEDULES_PATH = path.join(WORKSPACE_ROOT, ".telegram-schedules.json");
+const MODES_PATH = path.join(WORKSPACE_ROOT, ".telegram-bot-chat-modes.json");
+
+/** Прямая ссылка на страницу автоматизации в UI Cursor (нельзя выключить из Telegram без API). */
+const CURSOR_CLOUD_AUTOMATION_UI_URL =
+  "https://cursor.com/automations/059ecb27-eff3-416d-82e9-f894f4c56acb";
+
+type AgentMode = "agent" | "ask" | "plan";
 
 /** Маркер в lastTaskText: подставить актуальное ТЗ из очереди Wordstat. */
 const WORDSTAT_QUEUE_SENTINEL = "__WP_WORDSTAT_QUEUE_V1__";
@@ -155,6 +162,7 @@ class Mutex {
 
 const sessionMutex = new Mutex();
 const scheduleMutex = new Mutex();
+const modeMutex = new Mutex();
 
 function escapeHtml(s: string): string {
   return s
@@ -174,6 +182,8 @@ const REPLY_KB = {
   QUEUE_NEXT: "Следующая тема",
   SCHEDULE_LIST: "Расписание",
   AUTOMATIONS: "Автоматизации",
+  PUBLISH_ARTICLE: "Опубликовать статью",
+  STOP_AUTOMATION: "Остановить автоматизацию",
 } as const;
 
 function isReplyKeyboardShortcut(text: string): boolean {
@@ -304,6 +314,247 @@ function writeSessions(data: SessionsFile): void {
   const tmp = `${SESSIONS_PATH}.${process.pid}.tmp`;
   writeFileSync(tmp, JSON.stringify(data, null, 2), "utf-8");
   renameSync(tmp, SESSIONS_PATH);
+}
+
+function readModesFile(): Record<string, AgentMode> {
+  try {
+    if (!existsSync(MODES_PATH)) return {};
+    const raw = readFileSync(MODES_PATH, "utf-8");
+    const j = JSON.parse(raw) as Record<string, string>;
+    if (!j || typeof j !== "object") return {};
+    const out: Record<string, AgentMode> = {};
+    for (const [k, v] of Object.entries(j)) {
+      if (v === "ask" || v === "plan" || v === "agent") out[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function writeModesFile(data: Record<string, AgentMode>): void {
+  mkdirSync(path.dirname(MODES_PATH), { recursive: true });
+  const tmp = `${MODES_PATH}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify(data, null, 2), "utf-8");
+  renameSync(tmp, MODES_PATH);
+}
+
+async function getChatMode(chatIdStr: string): Promise<AgentMode> {
+  return modeMutex.runExclusive(async () => {
+    const m = readModesFile();
+    const v = m[chatIdStr];
+    return v === "ask" || v === "plan" ? v : "agent";
+  });
+}
+
+async function setChatMode(chatIdStr: string, mode: AgentMode): Promise<void> {
+  await modeMutex.runExclusive(async () => {
+    const m = readModesFile();
+    m[chatIdStr] = mode;
+    writeModesFile(m);
+  });
+}
+
+function normalizeTriggerPhrase(text: string): string {
+  return text.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function isExactPublishIntent(text: string): boolean {
+  const n = normalizeTriggerPhrase(text);
+  return n === "опубликуй статью" || n === "опубликовать статью";
+}
+
+function isExactStopAutomationIntent(text: string): boolean {
+  return normalizeTriggerPhrase(text) === "остановить автоматизацию";
+}
+
+function redactSecretsFromLog(s: string): string {
+  return s
+    .replace(/Bearer\s+\S+/gi, "Bearer [скрыто]")
+    .replace(/crsr_[a-zA-Z0-9]+/gi, "[скрыто]")
+    .slice(0, 500);
+}
+
+function runWordstatQueueNextReserve(): {
+  ok: boolean;
+  code: number | null;
+  json?: Record<string, unknown>;
+  detail?: string;
+} {
+  const script = path.join(WORKSPACE_ROOT, "scripts", "wp-wordstat-queue-next.mjs");
+  const r = spawnSync(process.execPath, [script], {
+    cwd: WORKSPACE_ROOT,
+    encoding: "utf-8",
+    env: process.env,
+    timeout: 240_000,
+  });
+  const code = r.status;
+  const stderr = redactSecretsFromLog(String(r.stderr ?? "").trim());
+  const stdout = String(r.stdout ?? "").trim();
+  if (code !== 0) {
+    return {
+      ok: false,
+      code: code ?? -1,
+      detail: stderr || `код выхода ${code}`,
+    };
+  }
+  try {
+    const json = JSON.parse(stdout) as Record<string, unknown>;
+    return { ok: true, code: 0, json };
+  } catch {
+    return {
+      ok: false,
+      code: code ?? -1,
+      detail: "вывод скрипта не является JSON",
+    };
+  }
+}
+
+function sanitizeQueueJsonForPrompt(j: Record<string, unknown>): string {
+  const copy: Record<string, unknown> = { ...j };
+  if (typeof copy.taskRu === "string" && copy.taskRu.length > 8000) {
+    copy.taskRu = `${copy.taskRu.slice(0, 8000)}\n…[усечено]`;
+  }
+  return JSON.stringify(copy, null, 2);
+}
+
+function buildWordpressPublishPipelinePrompt(queueJson: Record<string, unknown>): string {
+  const safe = sanitizeQueueJsonForPrompt(queueJson);
+  return [
+    "Ты работаешь в репозитории blog-seo-blueprint-pipeline как Cursor Agent.",
+    "",
+    "Уже выполнено для этого запуска из Telegram: **`npm run wp:wordstat-queue-next`** (следующий ключ очереди зарезервирован там, где это предусмотрено скриптом — не запускай команду повторно без причины).",
+    "",
+    "Результат команды (JSON):",
+    "```json",
+    safe,
+    "```",
+    "",
+    "Дальше действуй по регламенту автоматизации «Вордпресс статьи» (файл `.cursor/automations/wordpress-articles-wordstat-3h.md`, `prompts/wordpress-articles/MASTER_PROMPT.md`, правила медиа 16:9 / 21:9):",
+    "- При необходимости: `npm ci` и `npm run build`.",
+    '- Если `mode === "semantic_refill"` — выполни инструкции из `taskRu`, новую статью в прод в этом запуске не публикуй, если очередь не готова.',
+    '- Если `mode === "topic"` — используй `taskRu` как основное ТЗ и доведи до опубликованной статьи на wordprais.ru.',
+    "- Когда контент и медиа соответствуют политике: **`npm run scenario:wordpress-articles-with-nano`** (или **`npm run scenario:wordpress-articles`**, если nano уже не нужен по регламенту).",
+    "- Не раскрывай секреты и полные токены в ответе пользователю.",
+    "",
+    "В конце дай краткий отчёт: mode, phrase или причина refill, URL поста или почему остановились.",
+  ].join("\n");
+}
+
+function agentModeLabelRu(mode: AgentMode): string {
+  switch (mode) {
+    case "ask":
+      return "Ask — вопросы и диагностика без правок файлов";
+    case "plan":
+      return "Plan — только план, без выполнения";
+    default:
+      return "Agent — обычная автономная работа";
+  }
+}
+
+function buildRestrictedModePrefix(mode: Exclude<AgentMode, "agent">): string {
+  const utcIso = new Date().toISOString();
+  let timeLine = `<time>${utcIso}</time> (UTC)`;
+  const tz = process.env.BOT_TIMEZONE?.trim() || DEFAULT_BOT_TIMEZONE;
+  try {
+    const local = new Intl.DateTimeFormat("en-GB", {
+      timeZone: tz,
+      dateStyle: "medium",
+      timeStyle: "long",
+    }).format(new Date());
+    timeLine += `\nLocal (${tz}): ${local}`;
+  } catch {
+    timeLine += `\n(некорректная BOT_TIMEZONE)`;
+  }
+  const core =
+    mode === "ask"
+      ? [
+          "## Режим Ask",
+          "Ответь на запрос как консультант: пояснения, диагностика, ссылки на файлы и практики.",
+          "Запрещено без нового явного поручения пользователя: менять файлы в workspace, выполнять терминальные команды (npm, git и т.д.), публиковать материалы, делать commit или push.",
+        ].join("\n")
+      : [
+          "## Режим Plan",
+          "Дай пошаговый план решения без выполнения действий.",
+          "Запрещено: менять файлы, выполнять команды, публикации, commit/push.",
+        ].join("\n");
+  return `${core}\n\n${timeLine}\n\n---\n\n`;
+}
+
+async function replyPublishConfirmation(ctx: Context): Promise<void> {
+  if (!(await guardDangerous(ctx))) return;
+  await ctx.reply(
+    `<b>Публикация статьи из очереди Wordstat</b>\n\nШаг 1: резерв ключа через <code>npm run wp:wordstat-queue-next</code>. Шаг 2: полный цикл агента и npm-сценарии, как в автоматизации «Вордпресс статьи».\n\nЧтобы <b>подтвердить</b>, отправьте:\n<code>/publish_article_confirm</code>\n\nЕсли передумали — не отправляйте подтверждение.`,
+    { parse_mode: "HTML" },
+  );
+}
+
+async function replyStopAutomationNotice(ctx: Context): Promise<void> {
+  if (!(await guardDangerous(ctx))) return;
+  const id = String(ctx.chat!.id);
+  const all = await readSchedules();
+  const s = all[id];
+  const had = Boolean(s);
+  if (s) {
+    s.enabled = false;
+    all[id] = s;
+    await writeSchedules(all);
+  }
+  const local = had
+    ? "Локальные расписания этого чата в боте <b>остановлены</b> (шаблон сохранён)."
+    : "Активных локальных расписаний для этого чата не было.";
+  await ctx.reply(
+    `${local}\n\nОблачную автоматизацию Cursor (<b>Automations</b>) нельзя выключить из Telegram без отдельного API — отключите вручную в интерфейсе:\n<a href="${CURSOR_CLOUD_AUTOMATION_UI_URL}">Открыть страницу автоматизации в Cursor</a>`,
+    { parse_mode: "HTML" },
+  );
+}
+
+async function runConfirmedPublishArticle(
+  ctx: Context,
+  apiKey: string,
+  modelId: string,
+  mcpServers: Record<string, McpServerConfig> | undefined,
+): Promise<void> {
+  const chatIdStr = String(ctx.chat!.id);
+  const chatIdNum = ctx.chat!.id;
+  if (!(await guardDangerous(ctx))) return;
+  if (busyChats.has(chatIdStr)) {
+    await ctx.reply(
+      "Уже выполняется задача (в том числе публикация). Дождитесь завершения.",
+    );
+    return;
+  }
+  if (!apiKey.trim()) {
+    await ctx.reply(MSG_NO_CURSOR_API_KEY, { parse_mode: "HTML" });
+    return;
+  }
+  busyChats.add(chatIdStr);
+  try {
+    await ctx.reply(
+      "Выполняю резерв ключа: <code>npm run wp:wordstat-queue-next</code>…",
+      { parse_mode: "HTML" },
+    );
+    const rq = runWordstatQueueNextReserve();
+    if (!rq.ok || !rq.json) {
+      await ctx.reply(
+        `<b>Очередь Wordstat</b>\nНе удалось получить JSON после резерва (код ${rq.code ?? "?"}). ${rq.detail ? `<pre>${escapeHtml(rq.detail)}</pre>` : ""}`,
+        { parse_mode: "HTML" },
+      );
+      return;
+    }
+    await executeAgentJob({
+      chatIdStr,
+      chatIdNum: chatIdNum!,
+      userPlainText: buildWordpressPublishPipelinePrompt(rq.json),
+      api: ctx.api,
+      apiKey,
+      modelId,
+      mcpServers,
+      agentMode: "agent",
+    });
+  } finally {
+    busyChats.delete(chatIdStr);
+  }
 }
 
 async function readSchedules(): Promise<SchedulesFile> {
@@ -659,7 +910,7 @@ async function runAgentTurn(
   modelId: string,
   mcpServers: Record<string, McpServerConfig> | undefined,
   progress: AgentTurnProgress,
-  options?: { scheduled?: boolean },
+  options?: { scheduled?: boolean; agentMode?: AgentMode },
 ): Promise<string> {
   const personaRaw = loadPersonaRaw();
   const currentPersonaHash = shortSha256(personaRaw);
@@ -679,12 +930,21 @@ async function runAgentTurn(
 
   const injectPersona =
     hasPersonaBody && (rec?.personaHash ?? "") !== currentPersonaHash;
-  const prefix = buildAutonomyPrefix();
+  const agentMode: AgentMode = options?.agentMode ?? "agent";
+  const schedHint = options?.scheduled ? appendScheduledPublishHint() : "";
+  let prefixBody: string;
+  let tailHints: string;
+  if (agentMode === "ask" || agentMode === "plan") {
+    prefixBody = buildRestrictedModePrefix(agentMode);
+    tailHints = "";
+  } else {
+    prefixBody = `${buildAutonomyPrefix()}${schedHint}`;
+    tailHints = `${appendContentFactoryHint(userPlainText)}${appendWordpressArticlesHint(userPlainText)}${appendMayaiStructureReferenceClarity(userPlainText)}`;
+  }
   const personaBlock = injectPersona
     ? `# Persona (session sync)\n${personaRaw}\n\n---\n\n`
     : "";
-  const schedHint = options?.scheduled ? appendScheduledPublishHint() : "";
-  const payload = `${prefix}${schedHint}${appendContentFactoryHint(userPlainText)}${appendWordpressArticlesHint(userPlainText)}${appendMayaiStructureReferenceClarity(userPlainText)}${personaBlock}${userPlainText}`;
+  const payload = `${prefixBody}${tailHints}${personaBlock}${userPlainText}`;
 
   const agent = await getOrCreateAgent(
     chatId,
@@ -794,6 +1054,7 @@ async function executeAgentJob(params: {
   modelId: string;
   mcpServers: Record<string, McpServerConfig> | undefined;
   scheduled?: boolean;
+  agentMode?: AgentMode;
 }): Promise<void> {
   const {
     chatIdStr,
@@ -804,6 +1065,7 @@ async function executeAgentJob(params: {
     modelId,
     mcpServers,
     scheduled,
+    agentMode,
   } = params;
 
   if (!apiKey.trim()) {
@@ -861,7 +1123,7 @@ async function executeAgentJob(params: {
           await card.update("Завершаю…", 95);
         },
       },
-      { scheduled },
+      { scheduled, agentMode: agentMode ?? "agent" },
     );
 
     await card.update("Готово.", 100);
@@ -885,6 +1147,9 @@ function ownerReplyKeyboard(): Keyboard {
     .text(REPLY_KB.QUEUE_STATUS)
     .text(REPLY_KB.QUEUE_NEXT)
     .row()
+    .text(REPLY_KB.PUBLISH_ARTICLE)
+    .text(REPLY_KB.STOP_AUTOMATION)
+    .row()
     .text(REPLY_KB.SCHEDULE_LIST)
     .text(REPLY_KB.AUTOMATIONS)
     .row()
@@ -895,9 +1160,11 @@ function ownerReplyKeyboard(): Keyboard {
 function menuRootInline(): InlineKeyboard {
   return new InlineKeyboard()
     .text("Агенты в Cursor", "tgmenu:agents")
-    .text("Автоматизации", "tgmenu:auto")
+    .text("Режимы Ask/Plan", "tgmenu:modes")
     .row()
+    .text("Автоматизации", "tgmenu:auto")
     .text("Очередь Wordstat", "tgmenu:queue")
+    .row()
     .text("Расписания", "tgmenu:sched")
     .row()
     .text("Статус бота", "tgmenu:status")
@@ -1042,6 +1309,7 @@ async function buildStatusHtml(ctx: Context): Promise<string> {
   const allow = parseAllowlistIds();
   const allowMode = allowModeLabelRu(allow);
   const cid = ctx.chat?.id != null ? String(ctx.chat.id) : "";
+  const mode = cid ? await getChatMode(cid) : "agent";
   const mine = cid ? sessions[cid] : undefined;
   const mineAgent = mine?.agentId
     ? `${mine.agentId.slice(0, 6)}…${mine.agentId.slice(-4)}`
@@ -1053,6 +1321,7 @@ async function buildStatusHtml(ctx: Context): Promise<string> {
     "<b>Статус бота</b>",
     `• каталог workspace (<code>WORKSPACE_ROOT</code>): <code>${escapeHtml(WORKSPACE_ROOT)}</code>`,
     `• модель (<code>CURSOR_MODEL</code>): <code>${escapeHtml(effectiveCursorModel())}</code>`,
+    `• режим агента для этого чата: <b>${escapeHtml(agentModeLabelRu(mode))}</b> (/ask · /plan · /agent)`,
     `• доступ: <code>${escapeHtml(allowMode)}</code>; ваш уровень: <code>${escapeHtml(tierLabelRu(tier))}</code>`,
     `• записей сессий в файле: ${sessionKeys.length}; расписаний: ${schedKeys.length}`,
     `• ваш агент (маска <code>agentId</code>): <code>${escapeHtml(mineAgent)}</code>; хеш персоны: <code>${escapeHtml(persona)}</code>`,
@@ -1137,7 +1406,7 @@ async function main(): Promise<void> {
         ? "\n\n⚠ Сейчас режим <b>начальной настройки</b>: задайте <code>TELEGRAM_ALLOWED_CHAT_IDS</code> (команда /whoami или кнопка «Мой chat_id»). До этого агент Cursor и расписания недоступны."
         : "";
     await ctx.reply(
-      `<b>Добро пожаловать.</b> Обычное сообщение <i>без слэша</i> передаётся в локальный Cursor Agent (SDK).${tail}\n\n` +
+      `<b>Добро пожаловать.</b> Обычное сообщение <i>без слэша</i> передаётся в локальный Cursor Agent (SDK). Режимы: /ask · /plan · /agent.${tail}\n\n` +
         `Разделы: /menu · Справка: /help · Состояние: /status`,
       { ...html, reply_markup: ownerReplyKeyboard() },
     );
@@ -1155,7 +1424,16 @@ async function main(): Promise<void> {
     if (!(await guardOutsider(ctx))) return;
     await ctx.reply(
       `<b>Справка</b>\n` +
-        `Сообщение <i>без</i> команды <code>/…</code> уходит агенту в каталог <code>WORKSPACE_ROOT</code> (доступно только после настройки <code>TELEGRAM_ALLOWED_CHAT_IDS</code>).\n\n` +
+        `Сообщение <i>без</i> команды <code>/…</code> уходит агенту в каталог <code>WORKSPACE_ROOT</code> (после настройки <code>TELEGRAM_ALLOWED_CHAT_IDS</code>).\n\n` +
+        `<b>Режимы агента</b>\n` +
+        `• /ask или /mode_ask — Ask: только ответы/диагностика, без правок файлов и без команд\n` +
+        `• /plan или /mode_plan — Plan: только план, без выполнения\n` +
+        `• /agent или /mode_agent — обычная работа\n\n` +
+        `<b>Публикация «Вордпресс статьи»</b>\n` +
+        `Кнопка «Опубликовать статью», фразы <code>опубликуй статью</code> / <code>опубликовать статью</code> или /publish_article — только предупреждение.\n` +
+        `Подтверждение: <code>/publish_article_confirm</code> (резерв ключа <code>npm run wp:wordstat-queue-next</code>, затем агент + сценарии как в автоматизации).\n\n` +
+        `<b>Остановка автоматизации</b>\n` +
+        `Кнопка «Остановить автоматизацию», фраза <code>остановить автоматизацию</code> или /stop_automation — выключает локальные расписания бота; облако Cursor — только вручную в UI (бот пришлёт ссылку).\n\n` +
         `<b>Основные команды</b>\n` +
         `• /menu — меню с кнопками · /status — статус · /whoami — ваш chat_id\n` +
         `• /sessions или /agents — сведения о сессии · /new_agent · /reset\n` +
@@ -1186,6 +1464,45 @@ async function main(): Promise<void> {
   bot.command("queue_next", async (ctx) => {
     if (!(await guardPeekQueue(ctx))) return;
     await ctx.reply(runWordstatQueuePeek(), html);
+  });
+
+  bot.command(["ask", "mode_ask"], async (ctx) => {
+    if (!(await guardOutsider(ctx))) return;
+    await setChatMode(String(ctx.chat?.id ?? ""), "ask");
+    await ctx.reply(
+      "<b>Режим Ask</b>\nОбычный текст без <code>/</code> передаётся в Cursor Agent как <b>вопрос или диагностика</b>: без изменения файлов, без терминальных команд, публикаций, commit/push.\n\nВернитесь в рабочий режим: <code>/agent</code>",
+      html,
+    );
+  });
+
+  bot.command(["plan", "mode_plan"], async (ctx) => {
+    if (!(await guardOutsider(ctx))) return;
+    await setChatMode(String(ctx.chat?.id ?? ""), "plan");
+    await ctx.reply(
+      "<b>Режим Plan</b>\nОбычный текст — только <b>план шагов</b>, без выполнения: без правок файлов, команд, публикаций, commit/push.\n\nРабочий режим: <code>/agent</code>",
+      html,
+    );
+  });
+
+  bot.command(["agent", "mode_agent"], async (ctx) => {
+    if (!(await guardOutsider(ctx))) return;
+    await setChatMode(String(ctx.chat?.id ?? ""), "agent");
+    await ctx.reply(
+      "<b>Режим Agent</b>\nОбычный текст снова обрабатывается в полном автономном режиме (как раньше).",
+      html,
+    );
+  });
+
+  bot.command("publish_article", async (ctx) => {
+    await replyPublishConfirmation(ctx);
+  });
+
+  bot.command("publish_article_confirm", async (ctx) => {
+    await runConfirmedPublishArticle(ctx, apiKey, modelId, mcpServers);
+  });
+
+  bot.command("stop_automation", async (ctx) => {
+    await replyStopAutomationNotice(ctx);
   });
 
   bot.command(["sessions", "agents"], async (ctx) => {
@@ -1433,6 +1750,15 @@ async function main(): Promise<void> {
       if (t === REPLY_KB.AUTOMATIONS) {
         if (!(await guardOutsider(ctx))) return;
         await ctx.reply(listAutomationTemplatesHtml(), html);
+        return;
+      }
+      if (t === REPLY_KB.PUBLISH_ARTICLE) {
+        await replyPublishConfirmation(ctx);
+        return;
+      }
+      if (t === REPLY_KB.STOP_AUTOMATION) {
+        await replyStopAutomationNotice(ctx);
+        return;
       }
     });
 
@@ -1444,7 +1770,11 @@ async function main(): Promise<void> {
     switch (section) {
       case "agents":
         body =
-          "<b>Агенты Cursor</b>\n• /sessions — маска идентификатора сессии\n• /new_agent или /reset — новая сессия\n• Обычный текст (не команда) → агент (только для владельца после настройки списка чатов).\n";
+          "<b>Агенты Cursor</b>\n• /sessions — маска идентификатора сессии\n• /new_agent или /reset — новая сессия\n• Режимы: /ask · /plan · /agent\n• Обычный текст (не команда) → агент (владелец после allowlist).\n";
+        break;
+      case "modes":
+        body =
+          "<b>Режимы</b>\n• /ask — вопросы, без правок файлов\n• /plan — только план\n• /agent — обычная работа\n• Публикация статьи: кнопка или /publish_article → <code>/publish_article_confirm</code>\n• Стоп: кнопка или /stop_automation\n";
         break;
       case "auto":
         body = listAutomationTemplatesHtml();
@@ -1491,6 +1821,16 @@ async function main(): Promise<void> {
       const chatIdNum = ctx.chat?.id;
       const chatIdStr = String(chatIdNum);
       const fullText = ctx.message.text;
+
+      const rawTrim = fullText.trim();
+      if (isExactPublishIntent(rawTrim)) {
+        await replyPublishConfirmation(ctx);
+        return;
+      }
+      if (isExactStopAutomationIntent(rawTrim)) {
+        await replyStopAutomationNotice(ctx);
+        return;
+      }
 
       const natural = matchNaturalSchedule(fullText);
       let taskText = fullText.trim();
@@ -1553,6 +1893,7 @@ async function main(): Promise<void> {
 
       busyChats.add(chatIdStr);
       try {
+        const agentMode = await getChatMode(chatIdStr);
         await executeAgentJob({
           chatIdStr,
           chatIdNum: chatIdNum!,
@@ -1561,6 +1902,7 @@ async function main(): Promise<void> {
           apiKey,
           modelId,
           mcpServers,
+          agentMode,
         });
       } finally {
         busyChats.delete(chatIdStr);
@@ -1627,6 +1969,7 @@ async function main(): Promise<void> {
             modelId,
             mcpServers,
             scheduled: true,
+            agentMode: "agent",
           });
           sch.lastRunAt = now;
           sch.nextRunAt = now + sch.intervalMs;
@@ -1652,6 +1995,12 @@ async function main(): Promise<void> {
       { command: "help", description: "Справка по командам" },
       { command: "status", description: "Состояние бота и доступа" },
       { command: "whoami", description: "Ваш chat_id для whitelist" },
+      { command: "ask", description: "Режим Ask (без правок файлов)" },
+      { command: "plan", description: "Режим Plan (только план)" },
+      { command: "agent", description: "Режим Agent (рабочий)" },
+      { command: "mode_ask", description: "Алиас режима Ask" },
+      { command: "mode_plan", description: "Алиас режима Plan" },
+      { command: "mode_agent", description: "Алиас режима Agent" },
       { command: "sessions", description: "Сведения о сессии агента" },
       { command: "new_agent", description: "Новая сессия Cursor SDK" },
       { command: "reset", description: "Сбросить сессию в этом чате" },
@@ -1660,6 +2009,18 @@ async function main(): Promise<void> {
       {
         command: "queue_next",
         description: "Предпросмотр темы без записи в очередь",
+      },
+      {
+        command: "publish_article",
+        description: "Публикация статьи — только инструкция",
+      },
+      {
+        command: "publish_article_confirm",
+        description: "Подтвердить публикацию из очереди",
+      },
+      {
+        command: "stop_automation",
+        description: "Стоп расписаний бота + ссылка Cloud UI",
       },
       { command: "schedule_list", description: "Подробно о расписании" },
       { command: "schedule", description: "Кратко о расписании" },

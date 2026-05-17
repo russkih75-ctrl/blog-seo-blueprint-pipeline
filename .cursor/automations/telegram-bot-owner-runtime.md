@@ -59,7 +59,9 @@
 
 3) Не коммить изменения в .env. Если TELEGRAM_ALLOWED_CHAT_IDS пуст — владелец в Telegram выполняет /whoami или нажимает «Мой chat_id», добавляет chat_id в Secrets Cursor или .env, затем перезапускает job.
 
-4) В отчёте укажи: сборка ok/not ok, что показал bot:env-check (только set/empty/missing), запущен ли процесс; не включай токены и ключи.
+4) В отчёте укажи: сборка ok/not ok, что показал bot:env-check (только задано/пусто), запущен ли процесс; не включай токены и ключи.
+
+Функции бота для владельца (после allowlist): режимы /ask · /plan · /agent; публикация статьи из очереди только после явного /publish_article_confirm; /stop_automation выключает локальные расписания и напоминает выключить Cursor Cloud Automations вручную в UI (прямая ссылка приходит в Telegram).
 ```
 
 ---
