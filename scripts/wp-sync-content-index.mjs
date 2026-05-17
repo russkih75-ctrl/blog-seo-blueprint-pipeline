@@ -44,6 +44,9 @@ function canonicalTopicKey(text) {
   if (set.has("wordpress") && (set.has("взлом") || set.has("восстановление") || set.has("чистка"))) {
     return "wordpress взлом восстановление";
   }
+  if (set.has("seo") && set.has("продвижение") && (set.has("москва") || set.has("москве"))) {
+    return "seo продвижение москва";
+  }
   const weak = new Set([
     "на",
     "для",

@@ -40,6 +40,9 @@ function canonicalTopicKey(text) {
   if (set.has("wordpress") && (set.has("вирусы") || set.has("безопасность") || set.has("восстановление"))) {
     return "wordpress безопасность";
   }
+  if (set.has("seo") && set.has("продвижение") && (set.has("москва") || set.has("москве"))) {
+    return "seo продвижение москва";
+  }
   const weak = new Set(["сайт", "сайта", "сайтов", "сайты", "на", "для", "под", "без", "как", "что", "это", "или", "и", "в", "с", "по", "до", "от", "при", "2026", "году"]);
   const strong = tokens.filter((token) => !weak.has(token));
   return (strong.length ? strong : tokens).slice(0, 4).join(" ");

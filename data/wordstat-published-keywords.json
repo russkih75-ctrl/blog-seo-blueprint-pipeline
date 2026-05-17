@@ -1,8 +1,9 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-17T20:32:21.497Z",
+  "updatedAt": "2026-05-17T21:17:47.665Z",
   "processedPhrasesNorm": [
-    "seo продвижение сайта"
+    "seo продвижение сайта",
+    "seo продвижение сайта заказать"
   ],
   "records": [
     {
@@ -12,6 +13,14 @@
       "publicUrl": "https://wordprais.ru/2026/05/17/seo-prodvizhenie-sajta-na-wordpress-ustojchivyj-organicheskij-rost-bez-skazok-pro-volshebnye-metriki/",
       "source": "cli_wp_queue_reconcile_published",
       "updatedAt": "2026-05-17T20:32:21.497Z"
+    },
+    {
+      "phraseNorm": "seo продвижение сайта заказать",
+      "keywordId": "kw_0016",
+      "postId": 556,
+      "publicUrl": "https://wordprais.ru/2026/05/18/zakazat-seo-prodvizhenie-sajta-na-wordpress-brif-podryadchika-kpi-v-metrike-i-priyomka-rezultata/",
+      "source": "cli_wp_queue_reconcile_published",
+      "updatedAt": "2026-05-17T21:17:47.665Z"
     }
   ]
 }
