@@ -9,6 +9,8 @@ const ART = path.join(ROOT, "artifacts");
 const LAST_OUT_PATH = path.join(ART, "wordstat-queue-last.json");
 const RUN_LOG_PATH = path.join(ART, "workflow-wordstat-next.json");
 
+const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
+
 function run(cmd, args, opts = {}) {
   const res = spawnSync(cmd, args, {
     cwd: ROOT,
@@ -32,13 +34,13 @@ function readJson(file) {
 mkdirSync(ART, { recursive: true });
 
 const startedAt = new Date().toISOString();
-run("npm.cmd", ["run", "wp:sync-content-index"]);
+run(npmCmd, ["run", "wp:sync-content-index"]);
 
 const reusePending =
   String(process.env.WORDSTAT_REUSE_PENDING ?? "").toLowerCase() === "true";
 const existingLast = existsSync(LAST_OUT_PATH) ? readJson(LAST_OUT_PATH) : null;
 if (!reusePending || existingLast?.mode !== "topic" || !String(existingLast?.phrase ?? "").trim()) {
-  run("npm.cmd", ["run", "wp:wordstat-queue-next"]);
+  run(npmCmd, ["run", "wp:wordstat-queue-next"]);
 }
 if (!existsSync(LAST_OUT_PATH)) {
   throw new Error("wordstat-queue-last.json was not written");
@@ -83,7 +85,7 @@ writeFileSync(
   "utf-8",
 );
 
-run("npm.cmd", ["run", "workflow:cloud", "--", phrase]);
+run(npmCmd, ["run", "workflow:cloud", "--", phrase]);
 
 writeFileSync(
   RUN_LOG_PATH,

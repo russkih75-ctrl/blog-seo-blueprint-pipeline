@@ -1,8 +1,9 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-17T20:32:21.497Z",
+  "updatedAt": "2026-05-17T20:59:54.346Z",
   "processedPhrasesNorm": [
-    "seo продвижение сайта"
+    "seo продвижение сайта",
+    "seo продвижение сайта москва"
   ],
   "records": [
     {
@@ -12,6 +13,14 @@
       "publicUrl": "https://wordprais.ru/2026/05/17/seo-prodvizhenie-sajta-na-wordpress-ustojchivyj-organicheskij-rost-bez-skazok-pro-volshebnye-metriki/",
       "source": "cli_wp_queue_reconcile_published",
       "updatedAt": "2026-05-17T20:32:21.497Z"
+    },
+    {
+      "phraseNorm": "seo продвижение сайта москва",
+      "keywordId": "kw_0015",
+      "postId": 549,
+      "publicUrl": "https://wordprais.ru/2026/05/17/seo-prodvizhenie-sajta-v-moskve-na-wordpress-interpretacziya-klastera-wordstat-i-rabochij-plan-audita/",
+      "source": "content_publish_finalize",
+      "updatedAt": "2026-05-17T20:59:54.346Z"
     }
   ]
 }
