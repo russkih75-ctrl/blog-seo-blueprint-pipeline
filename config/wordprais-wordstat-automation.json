@@ -13,7 +13,16 @@
     "snapshotDate": "2026-05-16",
     "source": "wordstat_mcp_kv",
     "device": "all",
-    "notes": "Семантическое ядро собрано через YADryshko workflow и MCP-KV Wordstat. Брендовые/мусорные запросы исключены из публикационной очереди."
+    "notes": "Семантическое ядро собрано через YADryshko workflow и MCP-KV Wordstat. Брендовые/мусорные запросы исключены из публикационной очереди.",
+    "queueDedupe": {
+      "generatedAt": "2026-05-17T21:50:05.770Z",
+      "stats": {
+        "active": 95,
+        "skipped_exact": 1,
+        "skipped_canonical": 15,
+        "other_skipped": 0
+      }
+    }
   },
   "excludedBrandedQueries": [
     "seo продвижение сайтов seo fortuna",
@@ -115,7 +124,9 @@
       "seedPhrase": "разработка сайта на wordpress",
       "clusterId": "c_wp_commercial",
       "shows": 137,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "skipped_duplicate_canonical",
+      "skipReason": "duplicate_canonical_intent:intent:wp:wordpress разработка сайта"
     },
     {
       "id": "kw_0002",
@@ -124,7 +135,8 @@
       "seedPhrase": "создание сайта на wordpress",
       "clusterId": "c_wp_commercial",
       "shows": 470,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0003",
@@ -133,7 +145,9 @@
       "seedPhrase": "создание сайта на wordpress",
       "clusterId": "c_wp_commercial",
       "shows": 75,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "skipped_duplicate_canonical",
+      "skipReason": "duplicate_canonical_intent:intent:wp:wordpress разработка сайта"
     },
     {
       "id": "kw_0004",
@@ -142,7 +156,9 @@
       "seedPhrase": "создание сайта на wordpress",
       "clusterId": "c_wp_commercial",
       "shows": 73,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "skipped_duplicate_canonical",
+      "skipReason": "duplicate_canonical_intent:intent:wp:wordpress разработка сайта"
     },
     {
       "id": "kw_0005",
@@ -151,7 +167,9 @@
       "seedPhrase": "создание сайта на wordpress",
       "clusterId": "c_wp_commercial",
       "shows": 41,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "skipped_duplicate_canonical",
+      "skipReason": "duplicate_canonical_intent:intent:wp:wordpress разработка сайта"
     },
     {
       "id": "kw_0006",
@@ -160,7 +178,9 @@
       "seedPhrase": "создание сайта на wordpress",
       "clusterId": "c_wp_commercial",
       "shows": 13,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "skipped_duplicate_canonical",
+      "skipReason": "duplicate_canonical_intent:intent:wp:wordpress разработка сайта"
     },
     {
       "id": "kw_0007",
@@ -169,7 +189,9 @@
       "seedPhrase": "создание сайта на wordpress",
       "clusterId": "c_wp_commercial",
       "shows": 12,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "skipped_duplicate_canonical",
+      "skipReason": "duplicate_canonical_intent:intent:wp:wordpress разработка сайта"
     },
     {
       "id": "kw_0008",
@@ -178,7 +200,9 @@
       "seedPhrase": "создание сайта на wordpress",
       "clusterId": "c_wp_commercial",
       "shows": 12,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "skipped_duplicate_canonical",
+      "skipReason": "duplicate_canonical_intent:intent:wp:wordpress разработка сайта"
     },
     {
       "id": "kw_0009",
@@ -187,7 +211,9 @@
       "seedPhrase": "создание сайта на wordpress",
       "clusterId": "c_wp_commercial",
       "shows": 10,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "skipped_duplicate_canonical",
+      "skipReason": "duplicate_canonical_intent:intent:wp:wordpress разработка сайта"
     },
     {
       "id": "kw_0010",
@@ -196,7 +222,9 @@
       "seedPhrase": "создание сайта на wordpress",
       "clusterId": "c_wp_commercial",
       "shows": 10,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "skipped_duplicate_canonical",
+      "skipReason": "duplicate_canonical_intent:intent:wp:wordpress разработка сайта"
     },
     {
       "id": "kw_0011",
@@ -205,7 +233,9 @@
       "seedPhrase": "создание сайта на wordpress",
       "clusterId": "c_wp_commercial",
       "shows": 7,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "skipped_duplicate_canonical",
+      "skipReason": "duplicate_canonical_intent:intent:wp:wordpress разработка сайта"
     },
     {
       "id": "kw_0012",
@@ -214,7 +244,9 @@
       "seedPhrase": "создание сайта на wordpress",
       "clusterId": "c_wp_commercial",
       "shows": 5,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "skipped_duplicate_canonical",
+      "skipReason": "duplicate_canonical_intent:intent:wp:wordpress разработка сайта"
     },
     {
       "id": "kw_0013",
@@ -223,7 +255,8 @@
       "seedPhrase": "заказать сайт на wordpress",
       "clusterId": "c_wp_commercial",
       "shows": 54,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0014",
@@ -232,7 +265,8 @@
       "seedPhrase": "seo продвижение сайта",
       "clusterId": "c_seo_wp",
       "shows": 8513,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0015",
@@ -241,7 +275,8 @@
       "seedPhrase": "seo продвижение сайта",
       "clusterId": "c_seo_wp",
       "shows": 874,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0016",
@@ -250,7 +285,8 @@
       "seedPhrase": "seo продвижение сайта",
       "clusterId": "c_seo_wp",
       "shows": 667,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0017",
@@ -259,7 +295,8 @@
       "seedPhrase": "seo продвижение сайта",
       "clusterId": "c_seo_wp",
       "shows": 636,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0018",
@@ -268,7 +305,8 @@
       "seedPhrase": "seo продвижение сайта",
       "clusterId": "c_seo_wp",
       "shows": 616,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0019",
@@ -277,7 +315,8 @@
       "seedPhrase": "seo продвижение сайта",
       "clusterId": "c_seo_wp",
       "shows": 487,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0020",
@@ -286,7 +325,8 @@
       "seedPhrase": "seo продвижение сайта",
       "clusterId": "c_seo_wp",
       "shows": 287,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0021",
@@ -295,7 +335,8 @@
       "seedPhrase": "seo продвижение сайта",
       "clusterId": "c_seo_wp",
       "shows": 284,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0022",
@@ -304,7 +345,8 @@
       "seedPhrase": "seo продвижение сайта",
       "clusterId": "c_seo_wp",
       "shows": 279,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0023",
@@ -313,7 +355,8 @@
       "seedPhrase": "seo продвижение сайта",
       "clusterId": "c_seo_wp",
       "shows": 238,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0024",
@@ -322,7 +365,8 @@
       "seedPhrase": "seo продвижение сайта",
       "clusterId": "c_seo_wp",
       "shows": 234,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0025",
@@ -331,7 +375,8 @@
       "seedPhrase": "seo продвижение сайта",
       "clusterId": "c_seo_wp",
       "shows": 229,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0026",
@@ -340,7 +385,8 @@
       "seedPhrase": "seo продвижение сайта",
       "clusterId": "c_seo_wp",
       "shows": 220,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0027",
@@ -349,7 +395,8 @@
       "seedPhrase": "продвижение сайта в яндексе",
       "clusterId": "c_yandex_seo",
       "shows": 1950,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0028",
@@ -358,7 +405,8 @@
       "seedPhrase": "продвижение сайта в яндексе",
       "clusterId": "c_yandex_seo",
       "shows": 423,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0029",
@@ -367,7 +415,8 @@
       "seedPhrase": "продвижение сайта в яндексе",
       "clusterId": "c_yandex_seo",
       "shows": 300,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0030",
@@ -376,7 +425,9 @@
       "seedPhrase": "продвижение сайта в яндексе",
       "clusterId": "c_yandex_seo",
       "shows": 220,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "skipped_duplicate_exact",
+      "skipReason": "duplicate_normalized_phrase_lower_priority"
     },
     {
       "id": "kw_0031",
@@ -385,7 +436,8 @@
       "seedPhrase": "продвижение сайта в яндексе",
       "clusterId": "c_yandex_seo",
       "shows": 191,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0032",
@@ -394,7 +446,8 @@
       "seedPhrase": "продвижение сайта в яндексе",
       "clusterId": "c_yandex_seo",
       "shows": 189,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0033",
@@ -403,7 +456,8 @@
       "seedPhrase": "продвижение сайта в яндексе",
       "clusterId": "c_yandex_seo",
       "shows": 166,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0034",
@@ -412,7 +466,8 @@
       "seedPhrase": "продвижение сайта в яндексе",
       "clusterId": "c_yandex_seo",
       "shows": 150,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0035",
@@ -421,7 +476,8 @@
       "seedPhrase": "продвижение сайта в яндексе",
       "clusterId": "c_yandex_seo",
       "shows": 91,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0036",
@@ -430,7 +486,8 @@
       "seedPhrase": "продвижение сайта в яндексе",
       "clusterId": "c_yandex_seo",
       "shows": 55,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0037",
@@ -439,7 +496,8 @@
       "seedPhrase": "продвижение сайта в яндексе",
       "clusterId": "c_yandex_seo",
       "shows": 54,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0038",
@@ -448,7 +506,8 @@
       "seedPhrase": "продвижение сайта в яндексе",
       "clusterId": "c_yandex_seo",
       "shows": 53,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0039",
@@ -457,7 +516,8 @@
       "seedPhrase": "продвижение сайта в яндексе",
       "clusterId": "c_yandex_seo",
       "shows": 50,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0040",
@@ -466,7 +526,8 @@
       "seedPhrase": "seo аудит сайта",
       "clusterId": "c_seo_audit",
       "shows": 506,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0041",
@@ -475,7 +536,8 @@
       "seedPhrase": "seo аудит сайта",
       "clusterId": "c_seo_audit",
       "shows": 262,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0042",
@@ -484,7 +546,8 @@
       "seedPhrase": "seo аудит сайта",
       "clusterId": "c_seo_audit",
       "shows": 252,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0043",
@@ -493,7 +556,8 @@
       "seedPhrase": "seo аудит сайта",
       "clusterId": "c_seo_audit",
       "shows": 54,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0044",
@@ -502,7 +566,8 @@
       "seedPhrase": "seo аудит сайта",
       "clusterId": "c_seo_audit",
       "shows": 33,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0045",
@@ -511,7 +576,8 @@
       "seedPhrase": "seo аудит сайта",
       "clusterId": "c_seo_audit",
       "shows": 19,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0046",
@@ -520,7 +586,8 @@
       "seedPhrase": "seo аудит сайта",
       "clusterId": "c_seo_audit",
       "shows": 11,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0047",
@@ -529,7 +596,8 @@
       "seedPhrase": "seo аудит сайта",
       "clusterId": "c_seo_audit",
       "shows": 8,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0048",
@@ -538,7 +606,8 @@
       "seedPhrase": "seo аудит сайта",
       "clusterId": "c_seo_audit",
       "shows": 7,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0049",
@@ -547,7 +616,8 @@
       "seedPhrase": "настройка wordpress",
       "clusterId": "c_wp_setup",
       "shows": 658,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0050",
@@ -556,7 +626,9 @@
       "seedPhrase": "настройка wordpress",
       "clusterId": "c_wp_setup",
       "shows": 116,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "skipped_duplicate_canonical",
+      "skipReason": "duplicate_canonical_intent:intent:wp:настройка wordpress"
     },
     {
       "id": "kw_0051",
@@ -565,7 +637,8 @@
       "seedPhrase": "настройка wordpress",
       "clusterId": "c_wp_setup",
       "shows": 59,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0052",
@@ -574,7 +647,8 @@
       "seedPhrase": "настройка wordpress",
       "clusterId": "c_wp_setup",
       "shows": 57,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0053",
@@ -583,7 +657,8 @@
       "seedPhrase": "настройка wordpress",
       "clusterId": "c_wp_setup",
       "shows": 49,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0054",
@@ -592,7 +667,8 @@
       "seedPhrase": "настройка wordpress",
       "clusterId": "c_wp_setup",
       "shows": 48,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0055",
@@ -601,7 +677,8 @@
       "seedPhrase": "настройка wordpress",
       "clusterId": "c_wp_setup",
       "shows": 30,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0056",
@@ -610,7 +687,8 @@
       "seedPhrase": "настройка wordpress",
       "clusterId": "c_wp_setup",
       "shows": 26,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0057",
@@ -619,7 +697,8 @@
       "seedPhrase": "настройка wordpress",
       "clusterId": "c_wp_setup",
       "shows": 25,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0058",
@@ -628,7 +707,8 @@
       "seedPhrase": "настройка wordpress",
       "clusterId": "c_wp_setup",
       "shows": 22,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0059",
@@ -637,7 +717,8 @@
       "seedPhrase": "настройка wordpress",
       "clusterId": "c_wp_setup",
       "shows": 22,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0060",
@@ -646,7 +727,8 @@
       "seedPhrase": "настройка wordpress",
       "clusterId": "c_wp_setup",
       "shows": 21,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0061",
@@ -655,7 +737,8 @@
       "seedPhrase": "настройка wordpress",
       "clusterId": "c_wp_setup",
       "shows": 20,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0062",
@@ -664,7 +747,8 @@
       "seedPhrase": "настройка wordpress",
       "clusterId": "c_wp_setup",
       "shows": 17,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0063",
@@ -673,7 +757,8 @@
       "seedPhrase": "настройка wordpress",
       "clusterId": "c_wp_setup",
       "shows": 14,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0064",
@@ -682,7 +767,8 @@
       "seedPhrase": "настройка wordpress",
       "clusterId": "c_wp_setup",
       "shows": 13,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0065",
@@ -691,7 +777,8 @@
       "seedPhrase": "ускорение сайта wordpress",
       "clusterId": "c_wp_performance",
       "shows": 31,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0066",
@@ -700,7 +787,8 @@
       "seedPhrase": "ускорение сайта wordpress",
       "clusterId": "c_wp_performance",
       "shows": 10,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0067",
@@ -709,7 +797,8 @@
       "seedPhrase": "перенос сайта wordpress",
       "clusterId": "c_wp_migration",
       "shows": 101,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0068",
@@ -718,7 +807,8 @@
       "seedPhrase": "перенос сайта wordpress",
       "clusterId": "c_wp_migration",
       "shows": 46,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0069",
@@ -727,7 +817,8 @@
       "seedPhrase": "перенос сайта wordpress",
       "clusterId": "c_wp_migration",
       "shows": 28,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0070",
@@ -736,7 +827,8 @@
       "seedPhrase": "перенос сайта wordpress",
       "clusterId": "c_wp_migration",
       "shows": 25,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0071",
@@ -745,7 +837,8 @@
       "seedPhrase": "перенос сайта wordpress",
       "clusterId": "c_wp_migration",
       "shows": 22,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0072",
@@ -754,7 +847,8 @@
       "seedPhrase": "перенос сайта wordpress",
       "clusterId": "c_wp_migration",
       "shows": 20,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0073",
@@ -763,7 +857,8 @@
       "seedPhrase": "доработка сайта wordpress",
       "clusterId": "c_wp_support",
       "shows": 45,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0074",
@@ -772,7 +867,8 @@
       "seedPhrase": "поддержка сайта wordpress",
       "clusterId": "c_wp_support",
       "shows": 48,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0075",
@@ -781,7 +877,8 @@
       "seedPhrase": "поддержка сайта wordpress",
       "clusterId": "c_wp_support",
       "shows": 8,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0076",
@@ -790,7 +887,8 @@
       "seedPhrase": "безопасность wordpress",
       "clusterId": "c_wp_security",
       "shows": 84,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0077",
@@ -799,7 +897,9 @@
       "seedPhrase": "безопасность wordpress",
       "clusterId": "c_wp_security",
       "shows": 21,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "skipped_duplicate_canonical",
+      "skipReason": "duplicate_canonical_intent:intent:wp:wordpress безопасность"
     },
     {
       "id": "kw_0078",
@@ -808,7 +908,9 @@
       "seedPhrase": "безопасность wordpress",
       "clusterId": "c_wp_security",
       "shows": 13,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "skipped_duplicate_canonical",
+      "skipReason": "duplicate_canonical_intent:intent:wp:wordpress безопасность"
     },
     {
       "id": "kw_0079",
@@ -817,7 +919,8 @@
       "seedPhrase": "безопасность wordpress",
       "clusterId": "c_wp_security",
       "shows": 6,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0080",
@@ -826,7 +929,9 @@
       "seedPhrase": "wordpress вирусы",
       "clusterId": "c_wp_security",
       "shows": 30,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "skipped_duplicate_canonical",
+      "skipReason": "duplicate_canonical_intent:intent:wp:wordpress безопасность"
     },
     {
       "id": "kw_0081",
@@ -835,7 +940,8 @@
       "seedPhrase": "калькулятор для сайта",
       "clusterId": "c_calculators",
       "shows": 1908,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0082",
@@ -844,7 +950,8 @@
       "seedPhrase": "калькулятор для сайта",
       "clusterId": "c_calculators",
       "shows": 614,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0083",
@@ -853,7 +960,8 @@
       "seedPhrase": "калькулятор для сайта",
       "clusterId": "c_calculators",
       "shows": 541,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0084",
@@ -862,7 +970,8 @@
       "seedPhrase": "калькулятор для сайта",
       "clusterId": "c_calculators",
       "shows": 525,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0085",
@@ -871,7 +980,8 @@
       "seedPhrase": "калькулятор для сайта",
       "clusterId": "c_calculators",
       "shows": 92,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0086",
@@ -880,7 +990,8 @@
       "seedPhrase": "калькулятор для сайта",
       "clusterId": "c_calculators",
       "shows": 57,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0087",
@@ -889,7 +1000,8 @@
       "seedPhrase": "калькулятор для сайта",
       "clusterId": "c_calculators",
       "shows": 45,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0088",
@@ -898,7 +1010,8 @@
       "seedPhrase": "калькулятор для сайта",
       "clusterId": "c_calculators",
       "shows": 44,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0089",
@@ -907,7 +1020,8 @@
       "seedPhrase": "калькулятор для сайта",
       "clusterId": "c_calculators",
       "shows": 29,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0090",
@@ -916,7 +1030,8 @@
       "seedPhrase": "калькулятор для сайта",
       "clusterId": "c_calculators",
       "shows": 27,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0091",
@@ -925,7 +1040,8 @@
       "seedPhrase": "калькулятор для сайта",
       "clusterId": "c_calculators",
       "shows": 26,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0092",
@@ -934,7 +1050,8 @@
       "seedPhrase": "калькулятор для сайта",
       "clusterId": "c_calculators",
       "shows": 25,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0093",
@@ -943,7 +1060,8 @@
       "seedPhrase": "калькулятор для сайта",
       "clusterId": "c_calculators",
       "shows": 23,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0094",
@@ -952,7 +1070,8 @@
       "seedPhrase": "калькулятор для сайта",
       "clusterId": "c_calculators",
       "shows": 22,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0095",
@@ -961,7 +1080,8 @@
       "seedPhrase": "калькулятор для сайта",
       "clusterId": "c_calculators",
       "shows": 21,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0096",
@@ -970,7 +1090,8 @@
       "seedPhrase": "разработка плагина wordpress",
       "clusterId": "c_plugins_themes",
       "shows": 26,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0097",
@@ -979,7 +1100,8 @@
       "seedPhrase": "нейросеть для создания сайта",
       "clusterId": "c_geo_ai",
       "shows": 3139,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0098",
@@ -988,7 +1110,8 @@
       "seedPhrase": "нейросеть для создания сайта",
       "clusterId": "c_geo_ai",
       "shows": 865,
-      "priority": "P0"
+      "priority": "P0",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0099",
@@ -997,7 +1120,8 @@
       "seedPhrase": "нейросеть для создания сайта",
       "clusterId": "c_geo_ai",
       "shows": 133,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0100",
@@ -1006,7 +1130,8 @@
       "seedPhrase": "нейросеть для создания сайта",
       "clusterId": "c_geo_ai",
       "shows": 92,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0101",
@@ -1015,7 +1140,8 @@
       "seedPhrase": "нейросеть для создания сайта",
       "clusterId": "c_geo_ai",
       "shows": 90,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0102",
@@ -1024,7 +1150,8 @@
       "seedPhrase": "нейросеть для создания сайта",
       "clusterId": "c_geo_ai",
       "shows": 85,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0103",
@@ -1033,7 +1160,8 @@
       "seedPhrase": "нейросеть для создания сайта",
       "clusterId": "c_geo_ai",
       "shows": 78,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0104",
@@ -1042,7 +1170,8 @@
       "seedPhrase": "нейросеть для создания сайта",
       "clusterId": "c_geo_ai",
       "shows": 67,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0105",
@@ -1051,7 +1180,8 @@
       "seedPhrase": "нейросеть для создания сайта",
       "clusterId": "c_geo_ai",
       "shows": 52,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0106",
@@ -1060,7 +1190,8 @@
       "seedPhrase": "оптимизация сайта под нейросети",
       "clusterId": "c_geo_ai",
       "shows": 31,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0107",
@@ -1069,7 +1200,8 @@
       "seedPhrase": "наполнение сайта контентом",
       "clusterId": "c_content",
       "shows": 293,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0108",
@@ -1078,7 +1210,8 @@
       "seedPhrase": "наполнение сайта контентом",
       "clusterId": "c_content",
       "shows": 33,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0109",
@@ -1087,7 +1220,8 @@
       "seedPhrase": "наполнение сайта контентом",
       "clusterId": "c_content",
       "shows": 13,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0110",
@@ -1096,7 +1230,8 @@
       "seedPhrase": "наполнение сайта контентом",
       "clusterId": "c_content",
       "shows": 6,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     },
     {
       "id": "kw_0111",
@@ -1105,7 +1240,8 @@
       "seedPhrase": "статья для сайта заказать",
       "clusterId": "c_content",
       "shows": 26,
-      "priority": "P1"
+      "priority": "P1",
+      "queueStatus": "active"
     }
   ],
   "seeds": [

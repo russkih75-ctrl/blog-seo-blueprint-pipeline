@@ -11,6 +11,9 @@ artifacts/
 vendor/
 *.log
 
+# Runtime snapshot очереди (peek/reserve); durable-публикации — data/wordstat-published-keywords.json
+data/wordstat-queue-last-selection.json
+
 # локальные помощники для коммита (не в репозитории)
 commit-msg.txt
 _do-github-push.bat

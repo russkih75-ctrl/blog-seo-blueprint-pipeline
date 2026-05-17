@@ -22,6 +22,16 @@
 
 ---
 
+## Антидубли Wordstat → `/blog/` (обязательное правило)
+
+- **Один нормализованный ключ** (после lower, ё→е, пунктуации, пробелов и вариантов «сайта») **= не больше одной статьи**.
+- **Один канонический интент** внутри кластера (для **`c_seo_wp`** семейство «SEO + продвижение сайта» склеено в один интент) **= одна статья**. Уже закрыто durable: **kw_0014 / kw_0015 / kw_0016** (посты **541 / 549 / 556**) и блок **`intent:seo_site_promotion_general`** в **`data/wordstat-published-keywords.json`** — повторно эти фразы и близкие синонимы того же интента не публиковать.
+- Интервал **3 часа** = брать **следующий publishable** ключ после фильтров (`published`, `reserved/processed`, exact duplicate, canonical duplicate, пересечение с **`artifacts/content-index.json`** при наличии). Если ключ сомнительный как «ещё одна та же статья» — **пропуск / actionRequired / refill**, не дубль.
+
+Диагностика без секретов перед запуском цепочки: **`npm run wp:queue-audit`** (в CI/смоук также входит в **`npm run bot:sanity`**).
+
+---
+
 ## Поля в интерфейсе Cursor
 
 **Название (пример):** `Вордпресс статьи — Wordstat 3h`
@@ -50,14 +60,18 @@
    npm ci
    npm run build
 
-2) Получи ТЗ очереди Wordstat (JSON в stdout):
+2) Проверка очереди (нет секретов в выводе):  
+   `npm run wp:queue-audit`  
+   Убедись, что есть **`nextPublishable`**, а durable-трио **kw_0014–kw_0016** в отчёте помечены как пропуск (не должны стать следующим ключом).
+
+3) Получи ТЗ очереди Wordstat (JSON в stdout) и зарезервируй ключ (если не используешь только `--peek`):
    npm run wp:wordstat-queue-next
    Распарсь JSON: поля mode, taskRu, phrase, seedId, clusterId.
 
-3) Если mode === "semantic_refill":
+4) Если mode === "semantic_refill":
    Выполни инструкции из taskRu (ЯДрышко / расширение config/wordprais-wordstat-automation.json, npm run install:yadryshko-subagent при необходимости). Открой PR или зафиксируй изменения по правилам репозитория. Публикацию статьи в этом запуске не делай, если очередь не пополнена.
 
-4) Если mode === "topic":
+5) Если mode === "topic":
    Используй taskRu как основное ТЗ пользователя. Дальше строго следуй цепочке в prompts/wordpress-articles/MASTER_PROMPT.md (фазы A–J) и prompts/wordpress-articles/HTML_STRUCTURE_WORDPRAIS.md, config/wordpress-articles.json.
    Перед финальной фиксацией SEO выполни отдельный проход по skill duplicate-title-meta-guardian (уникальность seoTitle, meta description, slug относительно artifacts/content-index.json и при доступности — wordpress_search_posts). Затем duplicate-guardian по тексту статьи.
 
@@ -68,12 +82,12 @@
 
    Заполни artifacts/pipeline-state.json (seoTitle, metaDescription, articleHtml, метаданные изображений при наличии).
 
-5) Публикация npm-цепочкой только когда медиа-правило выше выполнено и pipeline-state готов:
+6) Публикация npm-цепочкой только когда медиа-правило выше выполнено и pipeline-state готов:
    npm run scenario:wordpress-articles-with-nano
-   Если по политике нужна только публикация без nano — npm run scenario:wordpress-articles (но только если медиа уже соответствует правилу шага 4).
+   Если по политике нужна только публикация без nano — npm run scenario:wordpress-articles (но только если медиа уже соответствует правилу шага 5).
    При уже опубликованном URL и блокировке дубликата см. WP_PUBLISH_FORCE в README (не включай без причины).
 
-6) В конце кратко отчитайся: seedId, phrase, режим mode, ссылка на пост если есть, ошибки MCP/npm.
+7) В конце кратко отчитайся: seedId, phrase, режим mode, ссылка на пост если есть, ошибки MCP/npm.
 
 Не выводи в лог секреты и полные URL MCP с токенами. Соблюдай allowlist ссылок только на wordprais.ru для исходящих ссылок в тексте.
 ```

@@ -6,6 +6,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { normalizePhrase } from "../wordstat-queue-core.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const DURABLE_PUBLISHED_PATH = path.join(
@@ -14,14 +15,9 @@ export const DURABLE_PUBLISHED_PATH = path.join(
   "wordstat-published-keywords.json",
 );
 
-/** Same normalization as scripts/wp-wordstat-queue-next.mjs */
+/** Общая нормализация с wordstat-queue-core (дефисы → пробелы, сайт→сайта, …). */
 export function normalizeQueuePhrase(text) {
-  return String(text ?? "")
-    .toLowerCase()
-    .replace(/ё/g, "е")
-    .replace(/[^\p{L}\p{N}\s-]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return normalizePhrase(text);
 }
 
 function readJsonSafe(file, fallback) {
@@ -68,6 +64,7 @@ export function mergeDurablePublishedRecord(p) {
   if (!norm) return readDurablePublished();
 
   const now = new Date().toISOString();
+  const rawFull = readJsonSafe(DURABLE_PUBLISHED_PATH, {}) ?? {};
   const data = readDurablePublished();
   const records = Array.isArray(data.records) ? [...data.records] : [];
 
@@ -85,13 +82,14 @@ export function mergeDurablePublishedRecord(p) {
   else records.push(nextRecord);
 
   const out = {
-    version: 1,
+    ...rawFull,
+    version: rawFull.version ?? 1,
     updatedAt: now,
     processedPhrasesNorm: pushUniqueNorm(data.processedPhrasesNorm, norm),
     records,
   };
   writeJsonAtomic(DURABLE_PUBLISHED_PATH, out);
-  return out;
+  return readDurablePublished();
 }
 
 /** Norms that must be treated as processed for queue picking */

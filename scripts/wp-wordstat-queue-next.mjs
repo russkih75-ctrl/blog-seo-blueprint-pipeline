@@ -1,10 +1,21 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { durableProcessedNormSet } from "./lib/wordstat-published-state.mjs";
-
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+import {
+  ROOT,
+  DEFAULT_PUBLISHED_PATH,
+  readJsonSafe,
+  normalizePhrase,
+  sortQueueForSelection,
+  loadPublishedKeywordsState,
+  indexBlockingSets,
+  canonicalIntentForPhrase,
+  evaluateKeywordSkip,
+} from "./wordstat-queue-core.mjs";
 
 /** Только stdout JSON «как при обычном запуске», без записи state/last-out (диагностика в Telegram). */
 const PEEK_QUEUE =
@@ -15,47 +26,7 @@ const CONFIG_PATH = path.join(ROOT, "config", "wordprais-wordstat-automation.jso
 const CONTENT_INDEX_PATH = path.join(ART, "content-index.json");
 const STATE_PATH = path.join(ART, "simple-keyword-queue.json");
 const LAST_OUT_PATH = path.join(ART, "wordstat-queue-last.json");
-
-function normalize(text) {
-  return String(text ?? "")
-    .toLowerCase()
-    .replace(/ё/g, "е")
-    .replace(/[^\p{L}\p{N}\s-]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function slugify(text) {
-  return normalize(text).replace(/\s+/g, "-").slice(0, 96) || "topic";
-}
-
-function canonicalTopicKey(text) {
-  const tokens = normalize(text).split(/\s+/).filter(Boolean);
-  const set = new Set(tokens);
-  if (set.has("wordpress") && set.has("заказать")) return "wordpress заказать сайт";
-  if (set.has("wordpress") && (set.has("разработка") || set.has("создание") || set.has("создания"))) {
-    return "wordpress разработка сайта";
-  }
-  if (set.has("wordpress") && set.has("elementor")) return "wordpress elementor";
-  if (set.has("wordpress") && (set.has("вирусы") || set.has("безопасность") || set.has("восстановление"))) {
-    return "wordpress безопасность";
-  }
-  if (set.has("seo") && set.has("продвижение") && (set.has("москва") || set.has("москве"))) {
-    return "seo продвижение москва";
-  }
-  const weak = new Set(["сайт", "сайта", "сайтов", "сайты", "на", "для", "под", "без", "как", "что", "это", "или", "и", "в", "с", "по", "до", "от", "при", "2026", "году"]);
-  const strong = tokens.filter((token) => !weak.has(token));
-  return (strong.length ? strong : tokens).slice(0, 4).join(" ");
-}
-
-function readJsonSafe(file, fallback) {
-  try {
-    if (!existsSync(file)) return fallback;
-    return JSON.parse(readFileSync(file, "utf-8"));
-  } catch {
-    return fallback;
-  }
-}
+const LAST_SELECTION_PATH = path.join(ROOT, "data", "wordstat-queue-last-selection.json");
 
 function writeJsonAtomic(file, value) {
   mkdirSync(path.dirname(file), { recursive: true });
@@ -64,48 +35,21 @@ function writeJsonAtomic(file, value) {
   renameSync(tmp, file);
 }
 
-function pushUnique(values, next, max = 2000) {
-  const out = (values ?? []).map((value) => normalize(value)).filter(Boolean);
-  const norm = normalize(next);
-  if (norm && !out.includes(norm)) out.push(norm);
-  return out.slice(-max);
-}
-
-function indexBlocks(indexEntries) {
-  const norms = new Set();
-  const slugs = new Set();
-  const topicKeys = new Set();
-  for (const entry of indexEntries) {
-    const state = String(entry.keywordState ?? "");
-    const status = String(entry.status ?? entry.publishStatus ?? "");
-    const blocks =
-      state === "processed" ||
-      status.includes("published") ||
-      status.includes("verified") ||
-      Boolean(entry.publicUrl || entry.verifiedAt || entry.publishVerifiedAt);
-    if (!blocks) continue;
-    for (const key of ["phrase", "primaryKeyword", "normalizedPhrase", "title", "titleNorm"]) {
-      const value = entry[key];
-      if (typeof value === "string" && value.trim()) norms.add(normalize(value));
-      if (typeof value === "string" && value.trim()) topicKeys.add(canonicalTopicKey(value));
-    }
-    if (entry.canonicalTopicKey) topicKeys.add(normalize(entry.canonicalTopicKey));
-    if (entry.slug) slugs.add(String(entry.slug).toLowerCase());
-  }
-  return { norms, slugs, topicKeys };
-}
-
 function buildQueue(config) {
   if (Array.isArray(config.keywordQueue) && config.keywordQueue.length) {
-    return config.keywordQueue.map((item, index) => ({
-      id: item.id ?? `kw_${String(index + 1).padStart(4, "0")}`,
-      phrase: String(item.phrase ?? "").trim(),
-      seedId: item.seedId ?? null,
-      seedPhrase: item.seedPhrase ?? item.phrase ?? "",
-      clusterId: item.clusterId ?? null,
-      shows: item.shows ?? null,
-      priority: item.priority ?? null,
-    }));
+    return config.keywordQueue
+      .map((item, index) => ({
+        id: item.id ?? `kw_${String(index + 1).padStart(4, "0")}`,
+        phrase: String(item.phrase ?? "").trim(),
+        seedId: item.seedId ?? null,
+        seedPhrase: item.seedPhrase ?? item.phrase ?? "",
+        clusterId: item.clusterId ?? null,
+        shows: item.shows ?? null,
+        priority: item.priority ?? null,
+        queueStatus: item.queueStatus ?? "active",
+      }))
+      .filter((item) => item.phrase)
+      .filter((item) => item.queueStatus === "active");
   }
   const queue = [];
   for (const seed of config.seeds ?? []) {
@@ -118,10 +62,18 @@ function buildQueue(config) {
         clusterId: seed.clusterId,
         shows: query.shows ?? null,
         priority: null,
+        queueStatus: "active",
       });
     }
   }
-  return queue;
+  return queue.filter((item) => item.phrase);
+}
+
+function pushUnique(values, next, max = 2000) {
+  const out = (values ?? []).map((value) => normalizePhrase(value)).filter(Boolean);
+  const norm = normalizePhrase(next);
+  if (norm && !out.includes(norm)) out.push(norm);
+  return out.slice(-max);
 }
 
 function buildTaskRu(config, item, cluster) {
@@ -140,16 +92,79 @@ function buildTaskRu(config, item, cluster) {
 - структура как у mayai-like гайдов: полезные блоки, таблица, FAQ, вывод, логика, SEO/GEO/AI-search;
 - обложка 16:9 и баннер 21:9 обязательны, без них публикацию блокировать;
 - никакого дубля title/meta/slug/content относительно artifacts/content-index.json и WordPress;
+- один нормализованный ключ / один канонический интент = одна статья на /blog/;
 - в уместном месте добавить: «Остались вопросы или нужна помощь? Контакты в шапке профиля или пишите в комментариях».
 `;
 }
 
+function buildDuplicateQueueNormMap(sortedQueue) {
+  const m = new Map();
+  for (const item of sortedQueue) {
+    const n = normalizePhrase(item.phrase);
+    if (!n) continue;
+    if (!m.has(n)) m.set(n, item.id);
+  }
+  return m;
+}
+
+function selectNextKeyword(sortedQueue, ctx) {
+  const skips = [];
+  const seenCanonical = new Set();
+  for (const item of sortedQueue) {
+    const skip = evaluateKeywordSkip(item, ctx);
+    if (skip) {
+      skips.push({
+        keywordId: item.id,
+        phrase: item.phrase,
+        clusterId: item.clusterId,
+        reason: skip.reason,
+      });
+      continue;
+    }
+    const ci = canonicalIntentForPhrase(item.phrase, item.clusterId);
+    if (ci && seenCanonical.has(ci)) {
+      skips.push({
+        keywordId: item.id,
+        phrase: item.phrase,
+        clusterId: item.clusterId,
+        reason: "duplicate_canonical_intent_in_queue_scan",
+        canonicalIntent: ci,
+      });
+      continue;
+    }
+    if (ci) seenCanonical.add(ci);
+    return { picked: item, skips };
+  }
+  return { picked: null, skips };
+}
+
+function writeLastSelection(payload) {
+  try {
+    mkdirSync(path.dirname(LAST_SELECTION_PATH), { recursive: true });
+    writeJsonAtomic(LAST_SELECTION_PATH, payload);
+  } catch {
+    /* noop — не блокируем очередь */
+  }
+}
+
 function main() {
   if (!PEEK_QUEUE) mkdirSync(ART, { recursive: true });
+  mkdirSync(path.dirname(LAST_SELECTION_PATH), { recursive: true });
+
   const config = readJsonSafe(CONFIG_PATH, null);
   if (!config) throw new Error(`Missing config: ${CONFIG_PATH}`);
-  const clustersById = new Map((config.clusters ?? []).map((cluster) => [cluster.id, cluster]));
-  const queue = buildQueue(config).filter((item) => item.phrase);
+
+  const publishedPath =
+    process.env.WORDSTAT_PUBLISHED_PATH?.trim() || DEFAULT_PUBLISHED_PATH;
+  const pub = loadPublishedKeywordsState(publishedPath);
+
+  const clustersById = new Map(
+    (config.clusters ?? []).map((cluster) => [cluster.id, cluster]),
+  );
+  const queue = buildQueue(config);
+  const sortedQueue = sortQueueForSelection(queue);
+  const duplicateQueueNorm = buildDuplicateQueueNormMap(sortedQueue);
+
   const state = readJsonSafe(STATE_PATH, {
     version: 1,
     reservedPhrasesNorm: [],
@@ -159,43 +174,76 @@ function main() {
   });
   const index = readJsonSafe(CONTENT_INDEX_PATH, { entries: [] });
   const indexEntries = Array.isArray(index.entries) ? index.entries : [];
-  const blocked = indexBlocks(indexEntries);
-  const reserved = new Set((state.reservedPhrasesNorm ?? []).map(normalize));
-  const processed = new Set((state.processedPhrasesNorm ?? []).map(normalize));
-  for (const n of durableProcessedNormSet()) processed.add(n);
-  const excluded = new Set((config.excludedBrandedQueries ?? []).map(normalize));
-  const blockedConfigTopics = new Set((config.blockedCanonicalTopicKeys ?? []).map(normalize));
+  const ib = indexBlockingSets(indexEntries);
 
-  const picked = queue.find((item) => {
-    const norm = normalize(item.phrase);
-    const topicKey = canonicalTopicKey(item.phrase);
-    if (!norm) return false;
-    if (excluded.has(norm)) return false;
-    if (reserved.has(norm)) return false;
-    if (processed.has(norm)) return false;
-    if (blocked.norms.has(norm)) return false;
-    if (topicKey && blocked.topicKeys.has(topicKey)) return false;
-    if (topicKey && blockedConfigTopics.has(topicKey)) return false;
-    if (blocked.slugs.has(slugify(item.phrase))) return false;
-    return true;
-  });
+  const reserved = new Set((state.reservedPhrasesNorm ?? []).map(normalizePhrase));
+  const processed = new Set((state.processedPhrasesNorm ?? []).map(normalizePhrase));
+  const excluded = new Set((config.excludedBrandedQueries ?? []).map(normalizePhrase));
+  const blockedConfigTopics = new Set(
+    (config.blockedCanonicalTopicKeys ?? []).map(normalizePhrase),
+  );
+
+  const ctx = {
+    keywordIdsPublished: pub.keywordIds,
+    publishedNorms: pub.norms,
+    publishedIntents: pub.intents,
+    duplicateQueueNorm,
+    reserved,
+    processed,
+    excluded,
+    blockedConfigTopics,
+    indexNorms: ib.norms,
+    indexSlugs: ib.slugs,
+    indexTopicKeys: ib.topicKeys,
+    indexCanonicalIntents: ib.canonicalIntents,
+  };
+
+  const { picked, skips } = selectNextKeyword(sortedQueue, ctx);
+
+  const selectionPayload = {
+    generatedAt: new Date().toISOString(),
+    peek: PEEK_QUEUE,
+    publishedPath: path.relative(ROOT, publishedPath),
+    skippedPreview: skips.slice(0, 48),
+    skippedTotal: skips.length,
+    kw0014InSkippedPreview: skips.some((s) => s.keywordId === "kw_0014"),
+    kw0015InSkippedPreview: skips.some((s) => s.keywordId === "kw_0015"),
+    kw0016InSkippedPreview: skips.some((s) => s.keywordId === "kw_0016"),
+  };
 
   if (!picked) {
     const out = {
       mode: "semantic_refill",
       reason: "keyword_queue_exhausted",
+      actionRequired:
+        "Все ключи отфильтрованы (дубликаты, durable-публикации, canonical intent, content-index). Обновите keywordQueue или data/wordstat-published-keywords.json после новой статьи.",
       taskRu:
-        "Плоский список ключевых слов исчерпан или все ключи уже зарезервированы/опубликованы. Запусти YADryshko и обнови keywordQueue.",
+        "Очередь не содержит следующего publishable-ключа: проверьте npm run wp:queue-audit и при необходимости пополните семантику (YADryshko), снимите блокировки или добавьте новые уникальные интенты.",
       configPath: path.relative(ROOT, CONFIG_PATH),
+      skipReasonsSample: skips.slice(0, 12),
     };
     const stamp = new Date().toISOString();
+    selectionPayload.nextPublishable = null;
+    selectionPayload.skipReasonsSample = skips.slice(0, 24);
+    writeLastSelection(selectionPayload);
+
     if (!PEEK_QUEUE)
       writeJsonAtomic(LAST_OUT_PATH, { ...out, generatedAt: stamp });
     process.stdout.write(`${JSON.stringify({ ...out, generatedAt: stamp, peek: PEEK_QUEUE }, null, 2)}\n`);
     return;
   }
 
-  const norm = normalize(picked.phrase);
+  selectionPayload.nextPublishable = {
+    keywordId: picked.id,
+    phrase: picked.phrase,
+    normalizedPhrase: normalizePhrase(picked.phrase),
+    canonicalIntent: canonicalIntentForPhrase(picked.phrase, picked.clusterId),
+    clusterId: picked.clusterId,
+  };
+  selectionPayload.skipReasonsSample = skips.slice(0, 24);
+  writeLastSelection(selectionPayload);
+
+  const norm = normalizePhrase(picked.phrase);
   const now = new Date().toISOString();
   if (!PEEK_QUEUE) {
     state.reservedPhrasesNorm = pushUnique(state.reservedPhrasesNorm ?? [], norm);
@@ -222,6 +270,9 @@ function main() {
     phrase: picked.phrase,
     shows: picked.shows,
     meta: config.meta ?? {},
+    normalizedPhrase: norm,
+    canonicalIntent: canonicalIntentForPhrase(picked.phrase, picked.clusterId),
+    skipReasonsPreview: skips.slice(0, 8),
     taskRu: buildTaskRu(config, picked, cluster),
     configPath: path.relative(ROOT, CONFIG_PATH),
   };

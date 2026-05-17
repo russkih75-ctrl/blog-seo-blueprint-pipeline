@@ -38,6 +38,8 @@
     "wp:sync-content-index": "node scripts/wp-sync-content-index.mjs",
     "wp:wordstat-queue-next": "node scripts/wp-wordstat-queue-next.mjs",
     "wp:queue-reconcile-published": "node scripts/wp-queue-reconcile-published.mjs",
+    "wp:queue-audit": "node scripts/wp-queue-audit.mjs",
+    "wp:mark-queue-duplicates": "node scripts/wordstat-mark-queue-duplicates.mjs --write",
     "wp:verify-published": "node scripts/wp-verify-published.mjs",
     "install:yadryshko-subagent": "node scripts/install-yadryshko-subagent.mjs",
     "yadryshko:update-wordprais-core": "node scripts/yadryshko-update-wordprais-core.mjs",

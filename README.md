@@ -68,7 +68,9 @@ node scripts/start-workflow-bg.mjs "Тема статьи"
 
 - **Проверка окружения без секретов:** `npm run bot:env-check` — только имена переменных и статус **«задано»** или **«пусто»** (значения не печатаются), плюс режим списка чатов.
 
-- **Очередь Wordstat без резерва ключа и смоук бота:** `npm run bot:sanity` — `wp-wordstat-queue-next --peek` (`peek: true` в JSON), проверка маркеров в собранном `dist/telegram-bot.js`, нормализация текстовых триггеров публикации/остановки.
+- **Очередь Wordstat без резерва ключа и смоук бота:** `npm run bot:sanity` — `wp-wordstat-queue-next --peek` (`peek: true` в JSON), **`wp:queue-audit`** (антидубль **kw_0014–kw_0016** и durable **`data/wordstat-published-keywords.json`**), проверка маркеров в собранном `dist/telegram-bot.js`, нормализация текстовых триггеров публикации/остановки.
+
+- **Только аудит очереди (следующий ключ и причины пропусков):** `npm run wp:queue-audit` (JSON на stdout; машинный вид: `--json`). Дедуп конфига очереди по нормализованной фразе и каноническому интенту: `npm run wp:mark-queue-duplicates` (перезаписывает `keywordQueue` статусами `skipped_duplicate_*`; перед массовым применением можно посмотреть статистику без `--write`: `node scripts/wordstat-mark-queue-duplicates.mjs`).
 
 - **Сборка и запуск:**
 
@@ -169,7 +171,11 @@ npm run scenario:publish-complete
 npm run scenario:wordpress-articles
 ```
 
-**Очередь Wordstat для «Вордпресс статьи»** (семена **ws_01…ws_16**, регион **225**, снимок **2026-05-14**, источник **wordstat_mcp_kv**): конфиг **`config/wordprais-wordstat-automation.json`**. Скрипт **`npm run wp:wordstat-queue-next`** выводит JSON с полем **`taskRu`** — готовое текстовое ТЗ для Cursor-агента и сохраняет курсор в **`artifacts/wordstat-queue-cursor.json`** (каталог `artifacts/` в `.gitignore`). Если все запросы уже задействованы или конфликтуют с **`artifacts/content-index.json`**, создаётся **`artifacts/wordstat-queue-need-refill.flag`** и **`taskRu`** описывает пополнение ядра через субагента **[ЯДрышко](https://github.com/Horosheff/yadryshko-semantic-core-subagent)** (`npm run install:yadryshko-subagent` кладёт репозиторий в **`vendor/`**, не коммитится при записи в `.gitignore`). Антидубль **title / meta / slug** — отдельный skill **`duplicate-title-meta-guardian`**.
+**Очередь Wordstat для «Вордпресс статьи»** (семена **ws_01…ws_16**, регион **225**, источник **wordstat_mcp_kv**): конфиг **`config/wordprais-wordstat-automation.json`**. **Правило антидублей:** один **нормализованный ключ** и один **канонический интент** (например всё семейство «SEO + продвижение сайта» в кластере **`c_seo_wp`**) соответствуют **не более одной** опубликованной статье на **`/blog/`**; при сомнении автоматизация должна уйти в **`semantic_refill` / `actionRequired` / пропуск**, а не во вторую статью с тем же интентом. Расписание **раз в 3 часа** означает **следующий publishable** ключ после фильтров — не параллельные дубли.
+
+Скрипт **`npm run wp:wordstat-queue-next`** выводит JSON с **`taskRu`** и резервирует нормализованную фразу в **`artifacts/simple-keyword-queue.json`** (каталог `artifacts/` в `.gitignore`). Долговечный журнал уже опубликованных ключей и заблокированных интентов (в т.ч. посты **541 / 549 / 556** для **kw_0014–kw_0016**): **`data/wordstat-published-keywords.json`** — пополнять после каждой verified-публикации. Последний проход выбора (без секретов): **`data/wordstat-queue-last-selection.json`**. Проверка очереди: **`npm run wp:queue-audit`**. Дедуп строк **`keywordQueue`** в конфиге (exact normalized + canonical intent, лучший приоритет/показы остаётся **active**): **`npm run wp:mark-queue-duplicates`**.
+
+При конфликте с **`artifacts/content-index.json`** очередь может вернуть режим пополнения семантики (**`semantic_refill`**) и **`taskRu`** про **[ЯДрышко](https://github.com/Horosheff/yadryshko-semantic-core-subagent)** (`npm run install:yadryshko-subagent` кладёт репозиторий в **`vendor/`**, не коммитится при записи в `.gitignore`). Антидубль **title / meta / slug** — skill **`duplicate-title-meta-guardian`**.
 
 В Telegram: **`/schedule_queue_every 3h`** — каждые 3 часа новая тема из этой очереди (бот подставляет **`taskRu`** автоматически). Обычное **`/schedule_every`** повторяет один и тот же сохранённый текст и сбрасывает режим очереди.
 
