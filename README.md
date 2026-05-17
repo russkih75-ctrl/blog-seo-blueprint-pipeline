@@ -131,6 +131,8 @@ npm run bot:stop     # SIGTERM по pid из файла
 
 **Очередь Wordstat:** `npm run wp:wordstat-queue-next` — обычный запуск (может зарезервировать ключ). Для предпросмотра без записи state: **`node scripts/wp-wordstat-queue-next.mjs --peek`** (используется командой **`/queue_next`** в боте).
 
+**Персистентность Cloud:** каталог **`artifacts/`** в свежем клоне пуст и не коммитится. Обработанные ключи с verified publication дополнительно фиксируются в **`data/wordstat-published-keywords.json`** (коммитится). Скрипт **`npm run wp:queue-reconcile-published`** помечает ключ вручную, если публикация была подтверждена вне `content:finalize-publish`. После успешного **`npm run content:finalize-publish`** запись в `data/` создаётся автоматически при `media-result` + `publish-verification` = ok.
+
 ### Docker (опционально)
 
 В репозитории есть **`Dockerfile`** (образ бота, не весь CI-проект). Сборка и запуск с примонтированным репозиторием:

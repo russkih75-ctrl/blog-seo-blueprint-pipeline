@@ -37,6 +37,7 @@
     "wp:delete-post": "node scripts/wp-delete-post-streamable.mjs",
     "wp:sync-content-index": "node scripts/wp-sync-content-index.mjs",
     "wp:wordstat-queue-next": "node scripts/wp-wordstat-queue-next.mjs",
+    "wp:queue-reconcile-published": "node scripts/wp-queue-reconcile-published.mjs",
     "wp:verify-published": "node scripts/wp-verify-published.mjs",
     "install:yadryshko-subagent": "node scripts/install-yadryshko-subagent.mjs",
     "yadryshko:update-wordprais-core": "node scripts/yadryshko-update-wordprais-core.mjs",

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "updatedAt": "2026-05-17T20:32:21.497Z",
+  "processedPhrasesNorm": [
+    "seo продвижение сайта"
+  ],
+  "records": [
+    {
+      "phraseNorm": "seo продвижение сайта",
+      "keywordId": "kw_0014",
+      "postId": 541,
+      "publicUrl": "https://wordprais.ru/2026/05/17/seo-prodvizhenie-sajta-na-wordpress-ustojchivyj-organicheskij-rost-bez-skazok-pro-volshebnye-metriki/",
+      "source": "cli_wp_queue_reconcile_published",
+      "updatedAt": "2026-05-17T20:32:21.497Z"
+    }
+  ]
+}

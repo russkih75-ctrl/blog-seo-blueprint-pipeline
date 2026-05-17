@@ -85,6 +85,34 @@ hydrateMcpKvFromCursorMcpJson();
 const EXTRACTED = path.join(ROOT, "prompts", "_extracted");
 const ART = path.join(ROOT, "artifacts");
 
+function normQueuePhrase(text: string): string {
+  return String(text ?? "")
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hydrateWordstatQueueMeta(topicRaw: string, state: SavedState): void {
+  try {
+    const lastPath = path.join(ART, "wordstat-queue-last.json");
+    if (!existsSync(lastPath)) return;
+    const last = JSON.parse(readFileSync(lastPath, "utf-8")) as {
+      mode?: string;
+      phrase?: string;
+      keywordId?: string;
+    };
+    if (last?.mode !== "topic" || typeof last.phrase !== "string") return;
+    if (normQueuePhrase(last.phrase) !== normQueuePhrase(topicRaw)) return;
+    state.wordstatQueuePhrase = last.phrase.trim();
+    if (typeof last.keywordId === "string" && last.keywordId.trim())
+      state.wordstatKeywordId = last.keywordId.trim();
+  } catch {
+    /* noop */
+  }
+}
+
 let loggedLocalRuntime = false;
 
 function sleep(ms: number): Promise<void> {
@@ -1264,6 +1292,9 @@ Last line exactly: WP_MEDIA_ID=123 WP_MEDIA_PUBLIC_URL=https://...`;
 
 interface SavedState {
   topic: string;
+  /** Совпадает с `artifacts/wordstat-queue-last.json`, если очередь зарезервировала этот ключ */
+  wordstatQueuePhrase?: string;
+  wordstatKeywordId?: string;
   seedsRaw?: string;
   seeds?: { k1: string; k2: string; k3: string };
   wordstatSynth?: string;
@@ -1356,6 +1387,8 @@ async function main(): Promise<void> {
   const state: SavedState = {
     topic: topicRaw,
   };
+  mkdirSync(ART, { recursive: true });
+  hydrateWordstatQueueMeta(topicRaw, state);
 
   /** 39 — три сид-фразы */
   let seedsPrompt = stripBlueprintHeader(loadMdByModule(39));

@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { durableProcessedNormSet } from "./lib/wordstat-published-state.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -158,6 +159,7 @@ function main() {
   const blocked = indexBlocks(indexEntries);
   const reserved = new Set((state.reservedPhrasesNorm ?? []).map(normalize));
   const processed = new Set((state.processedPhrasesNorm ?? []).map(normalize));
+  for (const n of durableProcessedNormSet()) processed.add(n);
   const excluded = new Set((config.excludedBrandedQueries ?? []).map(normalize));
   const blockedConfigTopics = new Set((config.blockedCanonicalTopicKeys ?? []).map(normalize));
 

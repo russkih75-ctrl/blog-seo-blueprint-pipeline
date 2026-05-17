@@ -14,6 +14,10 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  mergeDurablePublishedRecord,
+  normalizeQueuePhrase,
+} from "./lib/wordstat-published-state.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ART = path.join(ROOT, "artifacts");
@@ -108,6 +112,20 @@ function removeNorm(values, norm) {
     .filter((x) => x && x !== norm);
 }
 
+function removeQueueNorm(values, targetNorm) {
+  const t = normalizeQueuePhrase(targetNorm);
+  return (values ?? [])
+    .map((x) => normalizeQueuePhrase(String(x)))
+    .filter((x) => x && x !== t);
+}
+
+function pushQueueNormUnique(values, norm, max = 2000) {
+  const out = (values ?? []).map((x) => normalizeQueuePhrase(String(x))).filter(Boolean);
+  const n = normalizeQueuePhrase(norm);
+  if (n && !out.includes(n)) out.push(n);
+  return out.slice(-max);
+}
+
 function pushUnique(values, norm, max = 400) {
   const out = (values ?? [])
     .map((x) => normalizeFingerprint(String(x)))
@@ -116,16 +134,21 @@ function pushUnique(values, norm, max = 400) {
   return out.slice(-max);
 }
 
-function syncSimpleKeywordQueue(norm, processed, now) {
-  if (!norm) return;
+function syncSimpleKeywordQueue(phraseRaw, processed, now) {
+  const queueNorm = normalizeQueuePhrase(phraseRaw ?? "");
+  if (!queueNorm) return;
   const queue = readJsonSafe(SIMPLE_QUEUE_PATH, null);
   if (!queue || typeof queue !== "object") return;
-  queue.reservedPhrasesNorm = pushUnique(queue.reservedPhrasesNorm ?? [], norm, 2000);
+  queue.reservedPhrasesNorm = removeQueueNorm(queue.reservedPhrasesNorm ?? [], queueNorm);
   if (processed) {
-    queue.processedPhrasesNorm = pushUnique(queue.processedPhrasesNorm ?? [], norm, 2000);
+    queue.processedPhrasesNorm = pushQueueNormUnique(
+      queue.processedPhrasesNorm ?? [],
+      queueNorm,
+      2000,
+    );
     queue.processedAtByNorm = {
       ...(queue.processedAtByNorm ?? {}),
-      [norm]: now,
+      [queueNorm]: now,
     };
   }
   writeJsonAtomic(SIMPLE_QUEUE_PATH, queue);
@@ -139,6 +162,8 @@ function syncDurableKeywordState({
   publishResult,
   media,
   verification,
+  pipelineTopic,
+  pipelineWordstatKeywordId,
 }) {
   const mediaOk = isMediaOk(media);
   const verificationOk = isVerificationOk(verification, pubUrl);
@@ -191,6 +216,8 @@ function syncDurableKeywordState({
     writeJsonAtomic(CONTENT_INDEX_PATH, { ...index, entries });
   }
 
+  const phraseForQueue = (phrase ?? pipelineTopic ?? "").trim();
+
   if (norm) {
     const cursor = readJsonSafe(CURSOR_PATH, null);
     if (cursor && typeof cursor === "object") {
@@ -228,7 +255,33 @@ function syncDurableKeywordState({
     }
   }
 
-  syncSimpleKeywordQueue(norm, processed, now);
+  syncSimpleKeywordQueue(phraseForQueue, processed, now);
+
+  if (processed && pubUrl) {
+    const qn = normalizeQueuePhrase(phraseForQueue);
+    if (qn) {
+      let keywordId =
+        typeof pipelineWordstatKeywordId === "string" && pipelineWordstatKeywordId.trim()
+          ? pipelineWordstatKeywordId.trim()
+          : null;
+      if (!keywordId) {
+        const lastQ = readJsonSafe(path.join(ART, "wordstat-queue-last.json"), null);
+        if (
+          lastQ &&
+          typeof lastQ.phrase === "string" &&
+          normalizeQueuePhrase(lastQ.phrase) === qn
+        )
+          keywordId = typeof lastQ.keywordId === "string" ? lastQ.keywordId : null;
+      }
+      mergeDurablePublishedRecord({
+        phraseNorm: qn,
+        keywordId,
+        postId: postId ?? null,
+        publicUrl: pubUrl,
+        source: "content_publish_finalize",
+      });
+    }
+  }
 
   return {
     keywordState: processed ? "processed" : "pending",
@@ -340,6 +393,9 @@ async function main() {
     publishResult,
     media,
     verification,
+    pipelineTopic: typeof state.topic === "string" ? state.topic.trim() : "",
+    pipelineWordstatKeywordId:
+      typeof state.wordstatKeywordId === "string" ? state.wordstatKeywordId.trim() : "",
   });
 
   const qaPath = path.join(runDir, "qa-report.json");
