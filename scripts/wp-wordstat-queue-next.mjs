@@ -16,6 +16,10 @@ import {
   canonicalIntentForPhrase,
   evaluateKeywordSkip,
 } from "./wordstat-queue-core.mjs";
+import {
+  fetchWpRecentPublishedPosts,
+  buildWpLiveDuplicateMap,
+} from "./lib/wp-public-live-queue-guard.mjs";
 
 /** Только stdout JSON «как при обычном запуске», без записи state/last-out (диагностика в Telegram). */
 const PEEK_QUEUE =
@@ -147,7 +151,7 @@ function writeLastSelection(payload) {
   }
 }
 
-function main() {
+async function main() {
   if (!PEEK_QUEUE) mkdirSync(ART, { recursive: true });
   mkdirSync(path.dirname(LAST_SELECTION_PATH), { recursive: true });
 
@@ -183,6 +187,38 @@ function main() {
     (config.blockedCanonicalTopicKeys ?? []).map(normalizePhrase),
   );
 
+  const liveGuardOff = process.env.WORDSTAT_WP_LIVE_GUARD?.trim() === "0";
+  /** @type {{ enabled: boolean, ok: boolean|null, postsFetched: number, error?: string|null, httpStatus?: number }} */
+  let wpLiveGuard = {
+    enabled: !liveGuardOff,
+    ok: null,
+    postsFetched: 0,
+    error: liveGuardOff ? "disabled_WORDSTAT_WP_LIVE_GUARD_0" : null,
+  };
+  /** @type {Set<string>} */
+  let wpLiveDuplicateNorms = new Set();
+  if (!liveGuardOff) {
+    const origin = String(config.targetSite ?? "https://wordprais.ru").replace(
+      /\/+$/u,
+      "",
+    );
+    const live = await fetchWpRecentPublishedPosts(origin, {
+      perPage: 50,
+      timeoutMs: 12_000,
+    });
+    wpLiveGuard = {
+      ...wpLiveGuard,
+      ok: live.ok,
+      postsFetched: live.posts?.length ?? 0,
+      error: live.ok ? null : live.error ?? "fetch_failed",
+      httpStatus: live.httpStatus,
+    };
+    if (live.ok && Array.isArray(live.posts)) {
+      const dupMap = buildWpLiveDuplicateMap(sortedQueue, live.posts);
+      wpLiveDuplicateNorms = new Set(dupMap.keys());
+    }
+  }
+
   const ctx = {
     keywordIdsPublished: pub.keywordIds,
     publishedNorms: pub.norms,
@@ -196,6 +232,7 @@ function main() {
     indexSlugs: ib.slugs,
     indexTopicKeys: ib.topicKeys,
     indexCanonicalIntents: ib.canonicalIntents,
+    wpLiveDuplicateNorms,
   };
 
   const { picked, skips } = selectNextKeyword(sortedQueue, ctx);
@@ -204,6 +241,7 @@ function main() {
     generatedAt: new Date().toISOString(),
     peek: PEEK_QUEUE,
     publishedPath: path.relative(ROOT, publishedPath),
+    wpLiveGuard,
     skippedPreview: skips.slice(0, 48),
     skippedTotal: skips.length,
     kw0014InSkippedPreview: skips.some((s) => s.keywordId === "kw_0014"),
@@ -215,6 +253,7 @@ function main() {
     const out = {
       mode: "semantic_refill",
       reason: "keyword_queue_exhausted",
+      wpLiveGuard,
       actionRequired:
         "Все ключи отфильтрованы (дубликаты, durable-публикации, canonical intent, content-index). Обновите keywordQueue или data/wordstat-published-keywords.json после новой статьи.",
       taskRu:
@@ -262,6 +301,7 @@ function main() {
   const out = {
     mode: "topic",
     queueMode: "flat_keyword_queue",
+    wpLiveGuard,
     keywordId: picked.id,
     seedId: picked.seedId,
     seedPhrase: picked.seedPhrase,
@@ -280,4 +320,7 @@ function main() {
   process.stdout.write(`${JSON.stringify({ ...out, generatedAt: now, peek: PEEK_QUEUE }, null, 2)}\n`);
 }
 
-main();
+main().catch((e) => {
+  console.error(e instanceof Error ? e.message : e);
+  process.exitCode = 1;
+});

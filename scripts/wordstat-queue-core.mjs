@@ -289,5 +289,8 @@ export function evaluateKeywordSkip(item, ctx) {
   if (ctx.indexSlugs?.has(slugifyPhrase(item.phrase)))
     return { reason: "content_index_slug" };
 
+  if (ctx.wpLiveDuplicateNorms?.has(norm))
+    return { reason: "duplicate_wp_public_recent_post_title" };
+
   return null;
 }

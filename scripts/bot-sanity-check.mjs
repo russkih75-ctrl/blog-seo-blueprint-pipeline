@@ -21,7 +21,7 @@ function normTrigger(s) {
 const rpeek = spawnSync(process.execPath, [queueScript, "--peek"], {
   cwd: ROOT,
   encoding: "utf-8",
-  env: process.env,
+  env: { ...process.env, WORDSTAT_WP_LIVE_GUARD: "0" },
   timeout: 120_000,
 });
 
@@ -77,7 +77,7 @@ if (normTrigger("остановить автоматизацию") !== "оста
 const raudit = spawnSync(process.execPath, [queueAuditScript], {
   cwd: ROOT,
   encoding: "utf-8",
-  env: process.env,
+  env: { ...process.env, WORDSTAT_WP_LIVE_GUARD: "0" },
   timeout: 120_000,
 });
 

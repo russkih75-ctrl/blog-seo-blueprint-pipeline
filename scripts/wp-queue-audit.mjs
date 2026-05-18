@@ -16,6 +16,10 @@ import {
   evaluateKeywordSkip,
   seoPromotionSkeleton,
 } from "./wordstat-queue-core.mjs";
+import {
+  fetchWpRecentPublishedPosts,
+  buildWpLiveDuplicateMap,
+} from "./lib/wp-public-live-queue-guard.mjs";
 
 const CONFIG_PATH = path.join(ROOT, "config", "wordprais-wordstat-automation.json");
 const CONTENT_INDEX_PATH = path.join(ROOT, "artifacts", "content-index.json");
@@ -87,7 +91,7 @@ function selectNextKeyword(sortedQueue, ctx) {
   return { picked: null, skips };
 }
 
-function main() {
+async function main() {
   const publishedPath =
     process.env.WORDSTAT_PUBLISHED_PATH?.trim() || DEFAULT_PUBLISHED_PATH;
   const config = readJsonSafe(CONFIG_PATH, null);
@@ -106,6 +110,36 @@ function main() {
   const indexEntries = Array.isArray(index.entries) ? index.entries : [];
   const ib = indexBlockingSets(indexEntries);
 
+  const liveGuardOff = process.env.WORDSTAT_WP_LIVE_GUARD?.trim() === "0";
+  let wpLiveGuard = {
+    enabled: !liveGuardOff,
+    ok: null,
+    postsFetched: 0,
+    error: liveGuardOff ? "disabled_WORDSTAT_WP_LIVE_GUARD_0" : null,
+  };
+  let wpLiveDuplicateNorms = new Set();
+  if (!liveGuardOff) {
+    const origin = String(config.targetSite ?? "https://wordprais.ru").replace(
+      /\/+$/u,
+      "",
+    );
+    const live = await fetchWpRecentPublishedPosts(origin, {
+      perPage: 50,
+      timeoutMs: 12_000,
+    });
+    wpLiveGuard = {
+      ...wpLiveGuard,
+      ok: live.ok,
+      postsFetched: live.posts?.length ?? 0,
+      error: live.ok ? null : live.error ?? "fetch_failed",
+      httpStatus: live.httpStatus,
+    };
+    if (live.ok && Array.isArray(live.posts)) {
+      const dupMap = buildWpLiveDuplicateMap(sortedQueue, live.posts);
+      wpLiveDuplicateNorms = new Set(dupMap.keys());
+    }
+  }
+
   const ctx = {
     keywordIdsPublished: pub.keywordIds,
     publishedNorms: pub.norms,
@@ -121,6 +155,7 @@ function main() {
     indexSlugs: ib.slugs,
     indexTopicKeys: ib.topicKeys,
     indexCanonicalIntents: ib.canonicalIntents,
+    wpLiveDuplicateNorms,
   };
 
   const { picked, skips } = selectNextKeyword(sortedQueue, ctx);
@@ -155,6 +190,7 @@ function main() {
   const report = {
     generatedAt: new Date().toISOString(),
     publishedPath: path.relative(ROOT, publishedPath),
+    wpLiveGuard,
     seoPromotionIntent: SEO_SITE_PROMOTION_INTENT,
     nextPublishable: picked
       ? {
@@ -170,7 +206,7 @@ function main() {
     skippedTotal: skips.length,
     skippedKeywordsPreview: skips.slice(0, 35),
     kw0014_kw0015_kw0016: kw001x,
-    note: "Один нормализованный ключ и один канонический интент SEO-продвижения сайта = одна статья; kw_0014–0016 закрыты durable + canonical.",
+    note: "Один нормализованный ключ и один канонический интент SEO-продвижения сайта = одна статья; kw_0014–0016 закрыты durable + canonical. Перед выбором ключа учитываются последние публичные посты WP (WORDSTAT_WP_LIVE_GUARD=0 отключает сеть).",
   };
 
   if (JSON_ONLY) {
@@ -202,4 +238,7 @@ function main() {
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
 }
 
-main();
+main().catch((e) => {
+  console.error(e instanceof Error ? e.message : e);
+  process.exitCode = 1;
+});
