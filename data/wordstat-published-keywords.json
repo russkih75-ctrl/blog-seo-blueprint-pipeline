@@ -1,7 +1,7 @@
 {
   "version": 1,
   "notes": "Durable опубликованные ключи wordprais.ru/blog — не брать повторно (exact + canonical intent). Обновляйте при каждой verified-публикации (npm run wp:queue-reconcile-published).",
-  "updatedAt": "2026-05-18T09:32:34.960Z",
+  "updatedAt": "2026-05-18T21:05:29.066Z",
   "blockedIntents": [
     "intent:seo_site_promotion_general"
   ],
@@ -10,7 +10,8 @@
     "seo продвижение сайта москва",
     "seo продвижение сайта заказать",
     "нейросеть для создания сайтов",
-    "продвижение сайта в яндексе"
+    "продвижение сайта в яндексе",
+    "настройка wordpress"
   ],
   "records": [
     {
@@ -56,6 +57,15 @@
       "publicUrl": "https://wordprais.ru/2026/05/18/prodvizhenie-sajta-v-yandekse-v-2026-poisk-reklama-i-tehnicheskij-karkas-na-wordpress-bez-lishnego-shuma/",
       "source": "cli_wp_queue_reconcile_published",
       "updatedAt": "2026-05-18T09:32:34.960Z"
+    },
+    {
+      "phraseNorm": "настройка wordpress",
+      "keywordId": "kw_0049",
+      "postId": 587,
+      "canonicalIntent": "intent:wp:настройка wordpress",
+      "publicUrl": "https://wordprais.ru/2026/05/18/nastrojka-wordpress-dlya-biznes-sajta-adminka-tema-stek-plaginov-proizvoditelnost-i-bezopasnyj-start/",
+      "source": "duplicate_reconcile_existing_post_verified",
+      "updatedAt": "2026-05-18T21:05:29.066Z"
     }
   ]
 }

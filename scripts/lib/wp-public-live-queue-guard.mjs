@@ -99,7 +99,8 @@ export function findWpLiveDuplicateForNorm(phraseNorm, posts) {
   const norm = normalizePhrase(phraseNorm);
   if (!norm) return null;
   const tc = tokenCount(norm);
-  if (tc < 3) return null;
+  /** Одиночные токены («wordpress», «elementor») дают слишком много ложных совпадений; с двух токенов — подстрока в titleNorm уже надёжнее. */
+  if (tc < 2) return null;
 
   const topicPhrase = canonicalTopicKeyWp(norm);
 
@@ -111,7 +112,7 @@ export function findWpLiveDuplicateForNorm(phraseNorm, posts) {
       topicPhrase &&
       topicTitle &&
       topicPhrase === topicTitle &&
-      topicPhrase.split(/\s+/).filter(Boolean).length >= 3
+      topicPhrase.split(/\s+/).filter(Boolean).length >= 2
     ) {
       return { postId: p.postId, link: p.link };
     }
