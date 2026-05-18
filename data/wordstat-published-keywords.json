@@ -1,7 +1,7 @@
 {
   "version": 1,
   "notes": "Durable опубликованные ключи wordprais.ru/blog — не брать повторно (exact + canonical intent). Обновляйте при каждой verified-публикации (npm run wp:queue-reconcile-published).",
-  "updatedAt": "2026-05-18T09:32:34.960Z",
+  "updatedAt": "2026-05-18T15:19:46.114Z",
   "blockedIntents": [
     "intent:seo_site_promotion_general"
   ],
@@ -10,7 +10,8 @@
     "seo продвижение сайта москва",
     "seo продвижение сайта заказать",
     "нейросеть для создания сайтов",
-    "продвижение сайта в яндексе"
+    "продвижение сайта в яндексе",
+    "нейросеть для создания сайта бесплатно"
   ],
   "records": [
     {
@@ -56,6 +57,15 @@
       "publicUrl": "https://wordprais.ru/2026/05/18/prodvizhenie-sajta-v-yandekse-v-2026-poisk-reklama-i-tehnicheskij-karkas-na-wordpress-bez-lishnego-shuma/",
       "source": "cli_wp_queue_reconcile_published",
       "updatedAt": "2026-05-18T09:32:34.960Z"
+    },
+    {
+      "phraseNorm": "нейросеть для создания сайта бесплатно",
+      "keywordId": "kw_0098",
+      "postId": 578,
+      "canonicalIntent": "intent:c_geo_ai:нейросеть для создания сайта бесплатно",
+      "publicUrl": "https://wordprais.ru/2026/05/18/nejroset-dlya-sozdaniya-sajta-besplatno-chto-realno-dayut-generatory-i-gde-bez-wordpress-ne-obojtis/",
+      "source": "automation_verified_publication_2026-05-18",
+      "updatedAt": "2026-05-18T15:19:46.114Z"
     }
   ]
 }
