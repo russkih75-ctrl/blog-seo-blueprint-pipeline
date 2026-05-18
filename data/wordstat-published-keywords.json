@@ -1,7 +1,7 @@
 {
   "version": 1,
   "notes": "Durable опубликованные ключи wordprais.ru/blog — не брать повторно (exact + canonical intent). Обновляйте при каждой verified-публикации (npm run wp:queue-reconcile-published).",
-  "updatedAt": "2026-05-18T09:32:34.960Z",
+  "updatedAt": "2026-05-18T12:17:53.692Z",
   "blockedIntents": [
     "intent:seo_site_promotion_general"
   ],
@@ -10,7 +10,8 @@
     "seo продвижение сайта москва",
     "seo продвижение сайта заказать",
     "нейросеть для создания сайтов",
-    "продвижение сайта в яндексе"
+    "продвижение сайта в яндексе",
+    "калькулятор для сайта"
   ],
   "records": [
     {
@@ -56,6 +57,14 @@
       "publicUrl": "https://wordprais.ru/2026/05/18/prodvizhenie-sajta-v-yandekse-v-2026-poisk-reklama-i-tehnicheskij-karkas-na-wordpress-bez-lishnego-shuma/",
       "source": "cli_wp_queue_reconcile_published",
       "updatedAt": "2026-05-18T09:32:34.960Z"
+    },
+    {
+      "phraseNorm": "калькулятор для сайта",
+      "keywordId": "kw_0081",
+      "postId": 573,
+      "publicUrl": "https://wordprais.ru/2026/05/18/kalkulyator-dlya-sajta-na-wordpress-sczenarii-czena-integracziya-i-zashhita-zayavok/",
+      "source": "automation_cron_verified",
+      "updatedAt": "2026-05-18T12:17:53.692Z"
     }
   ]
 }
