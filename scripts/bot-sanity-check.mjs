@@ -57,6 +57,9 @@ for (const needle of [
   "mode_ask",
   "CURSOR_CLOUD_AUTOMATION_UI_URL",
   "buildRestrictedModePrefix",
+  "tgmode:ask",
+  "stop_run",
+  "Остановить текущий запуск",
 ]) {
   if (!distSrc.includes(needle)) {
     console.error(`FAIL: dist telegram-bot missing: ${needle}`);
@@ -71,6 +74,11 @@ if (normTrigger("  Опубликуй статью ") !== "опубликуй с
 
 if (normTrigger("остановить автоматизацию") !== "остановить автоматизацию") {
   console.error("FAIL: stop automation normalization");
+  process.exit(1);
+}
+
+if (normTrigger("  Остановить текущий запуск ") !== "остановить текущий запуск") {
+  console.error("FAIL: stop current run normalization");
   process.exit(1);
 }
 

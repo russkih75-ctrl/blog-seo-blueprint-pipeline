@@ -184,6 +184,7 @@ const REPLY_KB = {
   AUTOMATIONS: "Автоматизации",
   PUBLISH_ARTICLE: "Опубликовать статью",
   STOP_AUTOMATION: "Остановить автоматизацию",
+  STOP_CURRENT_RUN: "Остановить текущий запуск",
 } as const;
 
 function isReplyKeyboardShortcut(text: string): boolean {
@@ -368,6 +369,10 @@ function isExactStopAutomationIntent(text: string): boolean {
   return normalizeTriggerPhrase(text) === "остановить автоматизацию";
 }
 
+function isExactStopCurrentRunIntent(text: string): boolean {
+  return normalizeTriggerPhrase(text) === "остановить текущий запуск";
+}
+
 function redactSecretsFromLog(s: string): string {
   return s
     .replace(/Bearer\s+\S+/gi, "Bearer [скрыто]")
@@ -487,6 +492,21 @@ async function replyPublishConfirmation(ctx: Context): Promise<void> {
     `<b>Публикация статьи из очереди Wordstat</b>\n\nШаг 1: резерв ключа через <code>npm run wp:wordstat-queue-next</code>. Шаг 2: полный цикл агента и npm-сценарии, как в автоматизации «Вордпресс статьи».\n\nЧтобы <b>подтвердить</b>, отправьте:\n<code>/publish_article_confirm</code>\n\nЕсли передумали — не отправляйте подтверждение.`,
     { parse_mode: "HTML" },
   );
+}
+
+async function replyStopCurrentRunNotice(ctx: Context): Promise<void> {
+  if (!(await guardDangerous(ctx))) return;
+  const id = String(ctx.chat!.id);
+  if (busyChats.delete(id)) {
+    await ctx.reply(
+      "<b>Снята блокировка «занято»</b> для этого чата. Ответ по предыдущему запросу к агенту может ещё прийти из Cursor SDK; новые сообщения снова принимаются.",
+      { parse_mode: "HTML" },
+    );
+  } else {
+    await ctx.reply("Сейчас нет активной задачи в боте (флаг занятости не был установлен).", {
+      parse_mode: "HTML",
+    });
+  }
 }
 
 async function replyStopAutomationNotice(ctx: Context): Promise<void> {
@@ -1150,6 +1170,8 @@ function ownerReplyKeyboard(): Keyboard {
     .text(REPLY_KB.PUBLISH_ARTICLE)
     .text(REPLY_KB.STOP_AUTOMATION)
     .row()
+    .text(REPLY_KB.STOP_CURRENT_RUN)
+    .row()
     .text(REPLY_KB.SCHEDULE_LIST)
     .text(REPLY_KB.AUTOMATIONS)
     .row()
@@ -1159,6 +1181,10 @@ function ownerReplyKeyboard(): Keyboard {
 
 function menuRootInline(): InlineKeyboard {
   return new InlineKeyboard()
+    .text("Режим Ask", "tgmode:ask")
+    .text("Режим Plan", "tgmode:plan")
+    .text("Режим Agent", "tgmode:agent")
+    .row()
     .text("Агенты в Cursor", "tgmenu:agents")
     .text("Режимы Ask/Plan", "tgmenu:modes")
     .row()
@@ -1434,6 +1460,8 @@ async function main(): Promise<void> {
         `Подтверждение: <code>/publish_article_confirm</code> (резерв ключа <code>npm run wp:wordstat-queue-next</code>, затем агент + сценарии как в автоматизации).\n\n` +
         `<b>Остановка автоматизации</b>\n` +
         `Кнопка «Остановить автоматизацию», фраза <code>остановить автоматизацию</code> или /stop_automation — выключает локальные расписания бота; облако Cursor — только вручную в UI (бот пришлёт ссылку).\n\n` +
+        `<b>Остановка текущего запуска</b>\n` +
+        `Кнопка «Остановить текущий запуск», фраза <code>остановить текущий запуск</code> или /stop_run — снимает флаг «занято» в боте (поток Cursor SDK может ещё завершиться сам).\n\n` +
         `<b>Основные команды</b>\n` +
         `• /menu — меню с кнопками · /status — статус · /whoami — ваш chat_id\n` +
         `• /sessions или /agents — сведения о сессии · /new_agent · /reset\n` +
@@ -1503,6 +1531,10 @@ async function main(): Promise<void> {
 
   bot.command("stop_automation", async (ctx) => {
     await replyStopAutomationNotice(ctx);
+  });
+
+  bot.command("stop_run", async (ctx) => {
+    await replyStopCurrentRunNotice(ctx);
   });
 
   bot.command(["sessions", "agents"], async (ctx) => {
@@ -1760,7 +1792,39 @@ async function main(): Promise<void> {
         await replyStopAutomationNotice(ctx);
         return;
       }
+      if (t === REPLY_KB.STOP_CURRENT_RUN) {
+        await replyStopCurrentRunNotice(ctx);
+        return;
+      }
     });
+
+  bot.callbackQuery(/^tgmode:(ask|plan|agent)$/, async (ctx) => {
+    if (!(await guardOutsider(ctx))) return;
+    await ctx.answerCallbackQuery();
+    const chatIdStr = String(ctx.chat?.id ?? "");
+    const which = ctx.match![1];
+    if (which === "ask") {
+      await setChatMode(chatIdStr, "ask");
+      await ctx.reply(
+        "<b>Режим Ask</b>\nОбычный текст без <code>/</code> передаётся в Cursor Agent как <b>вопрос или диагностика</b>: без изменения файлов, без терминальных команд, публикаций, commit/push.\n\nВернитесь в рабочий режим: <code>/agent</code> или кнопку «Режим Agent».",
+        html,
+      );
+      return;
+    }
+    if (which === "plan") {
+      await setChatMode(chatIdStr, "plan");
+      await ctx.reply(
+        "<b>Режим Plan</b>\nОбычный текст — только <b>план шагов</b>, без выполнения: без правок файлов, команд, публикаций, commit/push.\n\nРабочий режим: <code>/agent</code> или кнопка «Режим Agent».",
+        html,
+      );
+      return;
+    }
+    await setChatMode(chatIdStr, "agent");
+    await ctx.reply(
+      "<b>Режим Agent</b>\nОбычный текст снова обрабатывается в полном автономном режиме (как раньше).",
+      html,
+    );
+  });
 
   bot.callbackQuery(/^tgmenu:(\w+)$/, async (ctx) => {
     if (!(await guardOutsider(ctx))) return;
@@ -1774,7 +1838,7 @@ async function main(): Promise<void> {
         break;
       case "modes":
         body =
-          "<b>Режимы</b>\n• /ask — вопросы, без правок файлов\n• /plan — только план\n• /agent — обычная работа\n• Публикация статьи: кнопка или /publish_article → <code>/publish_article_confirm</code>\n• Стоп: кнопка или /stop_automation\n";
+          "<b>Режимы</b>\n• Кнопки выше: <code>tgmode:ask|plan|agent</code> или команды /ask · /plan · /agent\n• Публикация статьи: кнопка или /publish_article → <code>/publish_article_confirm</code>\n• Стоп расписаний: кнопка или /stop_automation\n• Снять «занято»: кнопка или /stop_run\n";
         break;
       case "auto":
         body = listAutomationTemplatesHtml();
@@ -1829,6 +1893,10 @@ async function main(): Promise<void> {
       }
       if (isExactStopAutomationIntent(rawTrim)) {
         await replyStopAutomationNotice(ctx);
+        return;
+      }
+      if (isExactStopCurrentRunIntent(rawTrim)) {
+        await replyStopCurrentRunNotice(ctx);
         return;
       }
 
@@ -2021,6 +2089,10 @@ async function main(): Promise<void> {
       {
         command: "stop_automation",
         description: "Стоп расписаний бота + ссылка Cloud UI",
+      },
+      {
+        command: "stop_run",
+        description: "Снять блок «занято» (текущий запуск в боте)",
       },
       { command: "schedule_list", description: "Подробно о расписании" },
       { command: "schedule", description: "Кратко о расписании" },
