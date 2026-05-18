@@ -1,12 +1,13 @@
 {
   "version": 1,
   "notes": "Durable опубликованные ключи wordprais.ru/blog — не брать повторно (exact + canonical intent). Обновляйте при каждой verified-публикации (npm run wp:queue-reconcile-published).",
-  "updatedAt": "2026-05-17T22:05:00.000Z",
+  "updatedAt": "2026-05-18T03:14:00.000Z",
   "blockedIntents": ["intent:seo_site_promotion_general"],
   "processedPhrasesNorm": [
     "seo продвижение сайта",
     "seo продвижение сайта москва",
-    "seo продвижение сайта заказать"
+    "seo продвижение сайта заказать",
+    "нейросеть для создания сайтов"
   ],
   "records": [
     {
@@ -35,6 +36,15 @@
       "publicUrl": "https://wordprais.ru/2026/05/18/zakazat-seo-prodvizhenie-sajta-na-wordpress-brif-podryadchika-kpi-v-metrike-i-priyomka-rezultata/",
       "source": "cli_wp_queue_reconcile_published",
       "updatedAt": "2026-05-17T21:17:47.665Z"
+    },
+    {
+      "phraseNorm": "нейросеть для создания сайтов",
+      "keywordId": "kw_0097",
+      "postId": 561,
+      "canonicalIntent": "intent:c_geo_ai:нейросеть для создания сайтов",
+      "publicUrl": "https://wordprais.ru/2026/05/18/nejroset-dlya-sozdaniya-sajtov-na-wordpress-struktura-riski-i-rabochij-poryadok-bez-vydumannyh-metrik/",
+      "source": "automation_cursor_agent_verified_2026-05-18",
+      "updatedAt": "2026-05-18T03:14:00.000Z"
     }
   ]
 }
