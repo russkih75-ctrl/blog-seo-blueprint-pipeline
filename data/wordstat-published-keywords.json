@@ -1,13 +1,16 @@
 {
   "version": 1,
   "notes": "Durable опубликованные ключи wordprais.ru/blog — не брать повторно (exact + canonical intent). Обновляйте при каждой verified-публикации (npm run wp:queue-reconcile-published).",
-  "updatedAt": "2026-05-18T12:00:00.000Z",
-  "blockedIntents": ["intent:seo_site_promotion_general"],
+  "updatedAt": "2026-05-18T09:32:34.960Z",
+  "blockedIntents": [
+    "intent:seo_site_promotion_general"
+  ],
   "processedPhrasesNorm": [
     "seo продвижение сайта",
     "seo продвижение сайта москва",
     "seo продвижение сайта заказать",
-    "нейросеть для создания сайтов"
+    "нейросеть для создания сайтов",
+    "продвижение сайта в яндексе"
   ],
   "records": [
     {
@@ -45,6 +48,14 @@
       "publicUrl": "https://wordprais.ru/2026/05/18/nejroset-dlya-sozdaniya-sajtov-na-wordpress-struktura-riski-i-rabochij-poryadok-bez-vydumannyh-metrik/",
       "source": "duplicate_reconcile_existing_post_verified",
       "updatedAt": "2026-05-18T12:00:00.000Z"
+    },
+    {
+      "phraseNorm": "продвижение сайта в яндексе",
+      "keywordId": "kw_0027",
+      "postId": 569,
+      "publicUrl": "https://wordprais.ru/2026/05/18/prodvizhenie-sajta-v-yandekse-v-2026-poisk-reklama-i-tehnicheskij-karkas-na-wordpress-bez-lishnego-shuma/",
+      "source": "cli_wp_queue_reconcile_published",
+      "updatedAt": "2026-05-18T09:32:34.960Z"
     }
   ]
 }
