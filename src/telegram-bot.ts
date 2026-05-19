@@ -35,6 +35,13 @@ import {
   type SchedulesFile,
   writeSchedulesFile,
 } from "./telegram-schedule.js";
+import {
+  getSiteForChat,
+  setSiteForChat,
+  readTelegramWordstatSites,
+  siteAutomationHintBlock,
+  wordstatSpawnEnv,
+} from "./telegram-wordstat-sites.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 loadEnv({ path: path.join(ROOT, ".env") });
@@ -380,7 +387,7 @@ function redactSecretsFromLog(s: string): string {
     .slice(0, 500);
 }
 
-function runWordstatQueueNextReserve(): {
+function runWordstatQueueNextReserve(childEnv?: NodeJS.ProcessEnv): {
   ok: boolean;
   code: number | null;
   json?: Record<string, unknown>;
@@ -390,7 +397,7 @@ function runWordstatQueueNextReserve(): {
   const r = spawnSync(process.execPath, [script], {
     cwd: WORKSPACE_ROOT,
     encoding: "utf-8",
-    env: process.env,
+    env: childEnv ?? process.env,
     timeout: 240_000,
   });
   const code = r.status;
@@ -423,9 +430,17 @@ function sanitizeQueueJsonForPrompt(j: Record<string, unknown>): string {
   return JSON.stringify(copy, null, 2);
 }
 
-function buildWordpressPublishPipelinePrompt(queueJson: Record<string, unknown>): string {
+function buildWordpressPublishPipelinePrompt(
+  queueJson: Record<string, unknown>,
+  siteKey: string,
+): string {
+  const hint = siteAutomationHintBlock(WORKSPACE_ROOT, siteKey);
+  const registry = readTelegramWordstatSites(WORKSPACE_ROOT);
+  const label = registry.sites[siteKey]?.label ?? siteKey;
   const safe = sanitizeQueueJsonForPrompt(queueJson);
   return [
+    hint,
+    "",
     "Ты работаешь в репозитории blog-seo-blueprint-pipeline как Cursor Agent.",
     "",
     "Уже выполнено для этого запуска из Telegram: **`npm run wp:wordstat-queue-next`** (следующий ключ очереди зарезервирован там, где это предусмотрено скриптом — не запускай команду повторно без причины).",
@@ -435,11 +450,11 @@ function buildWordpressPublishPipelinePrompt(queueJson: Record<string, unknown>)
     safe,
     "```",
     "",
-    "Дальше действуй по регламенту автоматизации «Вордпресс статьи» (файл `.cursor/automations/wordpress-articles-wordstat-3h.md`, `prompts/wordpress-articles/MASTER_PROMPT.md`, правила медиа 16:9 / 21:9):",
+    `Дальше действуй по регламенту автоматизации «Вордпресс статьи» (файл \`.cursor/automations/wordpress-articles-wordstat-3h.md\`, \`prompts/wordpress-articles/MASTER_PROMPT.md\`, правила медиа 16:9 / 21:9). Целевой сайт и ссылки — из **config/wordpress-articles.json** после \\\`npm run site:${siteKey === "bytmaster34" ? "bytmaster34" : "wordprais"}\\\`; домен ориентира: **${label}**.`,
     "- При необходимости: `npm ci` и `npm run build`.",
     '- Если `mode === "semantic_refill"` — выполни инструкции из `taskRu`, новую статью в прод в этом запуске не публикуй, если очередь не готова.',
-    '- Если `mode === "topic"` — используй `taskRu` как основное ТЗ и доведи до опубликованной статьи на wordprais.ru.',
-    "- Когда контент и медиа соответствуют политике: **`npm run scenario:wordpress-articles-with-nano`** (или **`npm run scenario:wordpress-articles`**, если nano уже не нужен по регламенту).",
+    `- Если \`mode === "topic"\` — используй \`taskRu\` как основное ТЗ и доведи до опубликованной статьи на ${label}.`,
+    "- Когда контент и медиа соответствуют политике: **`npm run scenario:wordpress-articles-with-nano`** (или **`npm run scenario:wordpress-articles`**, если nano уже не нужен по регламенту). Перед этим экспортируй **WORDSTAT_SITE_KEY** и пути очереди как в блоке выше.",
     "- Не раскрывай секреты и полные токены в ответе пользователю.",
     "",
     "В конце дай краткий отчёт: mode, phrase или причина refill, URL поста или почему остановились.",
@@ -550,11 +565,13 @@ async function runConfirmedPublishArticle(
   }
   busyChats.add(chatIdStr);
   try {
+    const site = getSiteForChat(WORKSPACE_ROOT, chatIdStr);
+    const childEnv = wordstatSpawnEnv(WORKSPACE_ROOT, site);
     await ctx.reply(
-      "Выполняю резерв ключа: <code>npm run wp:wordstat-queue-next</code>…",
+      `Выполняю резерв ключа: <code>npm run wp:wordstat-queue-next</code> (профиль <code>${escapeHtml(site)}</code>)…`,
       { parse_mode: "HTML" },
     );
-    const rq = runWordstatQueueNextReserve();
+    const rq = runWordstatQueueNextReserve(childEnv);
     if (!rq.ok || !rq.json) {
       await ctx.reply(
         `<b>Очередь Wordstat</b>\nНе удалось получить JSON после резерва (код ${rq.code ?? "?"}). ${rq.detail ? `<pre>${escapeHtml(rq.detail)}</pre>` : ""}`,
@@ -565,7 +582,7 @@ async function runConfirmedPublishArticle(
     await executeAgentJob({
       chatIdStr,
       chatIdNum: chatIdNum!,
-      userPlainText: buildWordpressPublishPipelinePrompt(rq.json),
+      userPlainText: buildWordpressPublishPipelinePrompt(rq.json, site),
       api: ctx.api,
       apiKey,
       modelId,
@@ -1197,15 +1214,16 @@ function menuRootInline(): InlineKeyboard {
     .text("Мой chat_id", "tgmenu:whoami");
 }
 
-function readWordstatQueueDiagnostics(): string {
-  const configPath = path.join(
-    WORKSPACE_ROOT,
-    "config",
-    "wordprais-wordstat-automation.json",
-  );
-  if (!existsSync(configPath))
-    return "Конфиг не найден: config/wordprais-wordstat-automation.json";
+function readWordstatQueueDiagnostics(chatId: number): string {
   try {
+    const site = getSiteForChat(WORKSPACE_ROOT, chatId);
+    const registry = readTelegramWordstatSites(WORKSPACE_ROOT);
+    const row = registry.sites[site];
+    if (!row)
+      return `Неизвестный профиль сайта: <code>${escapeHtml(site)}</code>`;
+    const configPath = path.join(WORKSPACE_ROOT, row.wordstatAutomationConfig);
+    if (!existsSync(configPath))
+      return `Конфиг не найден: <code>${escapeHtml(row.wordstatAutomationConfig)}</code>`;
     const conf = JSON.parse(readFileSync(configPath, "utf-8")) as {
       keywordQueue?: unknown[];
       seeds?: { queries?: unknown[] }[];
@@ -1218,11 +1236,14 @@ function readWordstatQueueDiagnostics(): string {
     }
     let reserved = 0;
     let processed = 0;
-    const statePath = path.join(
-      WORKSPACE_ROOT,
-      "artifacts",
-      "simple-keyword-queue.json",
-    );
+    const statePath =
+      site === "wordprais"
+        ? path.join(WORKSPACE_ROOT, "artifacts", "simple-keyword-queue.json")
+        : path.join(
+            WORKSPACE_ROOT,
+            "artifacts",
+            `simple-keyword-queue.${site}.json`,
+          );
     if (existsSync(statePath)) {
       const st = JSON.parse(readFileSync(statePath, "utf-8")) as {
         reservedPhrasesNorm?: unknown[];
@@ -1236,11 +1257,14 @@ function readWordstatQueueDiagnostics(): string {
         : 0;
     }
     let lastMode = "—";
-    const lastPath = path.join(
-      WORKSPACE_ROOT,
-      "artifacts",
-      "wordstat-queue-last.json",
-    );
+    const lastPath =
+      site === "wordprais"
+        ? path.join(WORKSPACE_ROOT, "artifacts", "wordstat-queue-last.json")
+        : path.join(
+            WORKSPACE_ROOT,
+            "artifacts",
+            `wordstat-queue-last.${site}.json`,
+          );
     if (existsSync(lastPath)) {
       const last = JSON.parse(readFileSync(lastPath, "utf-8")) as {
         mode?: string;
@@ -1249,17 +1273,22 @@ function readWordstatQueueDiagnostics(): string {
     }
     return (
       `<b>Очередь Wordstat</b> (только просмотр)\n` +
+      `• профиль чата: <code>${escapeHtml(site)}</code> (${escapeHtml(row.label)})\n` +
+      `• конфиг: <code>${escapeHtml(row.wordstatAutomationConfig)}</code>\n` +
       `• ключей в конфиге (оценка): ${q}\n` +
       `• зарезервировано в состоянии: ${reserved}\n` +
       `• обработано (processed): ${processed}\n` +
-      `• последний режим в артефакте: <code>${escapeHtml(lastMode)}</code>`
+      `• последний режим в артефакте: <code>${escapeHtml(lastMode)}</code>\n` +
+      `• переключение: /site_wordprais · /site_bytmaster34 · /site`
     );
   } catch {
     return "Не удалось прочитать файлы очереди.";
   }
 }
 
-function runWordstatQueuePeek(): string {
+function runWordstatQueuePeek(chatId: number): string {
+  const site = getSiteForChat(WORKSPACE_ROOT, chatId);
+  const childEnv = wordstatSpawnEnv(WORKSPACE_ROOT, site);
   const script = path.join(
     WORKSPACE_ROOT,
     "scripts",
@@ -1269,7 +1298,7 @@ function runWordstatQueuePeek(): string {
     const r = spawnSync(process.execPath, [script, "--peek"], {
       cwd: WORKSPACE_ROOT,
       encoding: "utf-8",
-      env: process.env,
+      env: childEnv,
       timeout: 120_000,
     });
     if (r.status !== 0) {
@@ -1290,6 +1319,7 @@ function runWordstatQueuePeek(): string {
       j.taskRu?.trim().slice(0, 600) ?? "";
     const lines = [
       `<b>Предпросмотр следующей темы</b> (очередь не меняется)`,
+      `• профиль: <code>${escapeHtml(site)}</code>`,
       `• режим: <code>${escapeHtml(j.mode ?? "?")}</code>`,
       `• запись состояния отключена: <code>${j.peek === true ? "да" : "нет"}</code>`,
     ];
@@ -1343,9 +1373,21 @@ async function buildStatusHtml(ctx: Context): Promise<string> {
   const persona = mine?.personaHash
     ? `${mine.personaHash.slice(0, 8)}…`
     : "—";
+  let siteLine = "—";
+  if (cid) {
+    try {
+      const sk = getSiteForChat(WORKSPACE_ROOT, cid);
+      const reg = readTelegramWordstatSites(WORKSPACE_ROOT);
+      const lbl = reg.sites[sk]?.label ?? sk;
+      siteLine = `${lbl} (<code>${escapeHtml(sk)}</code>)`;
+    } catch {
+      siteLine = "ошибка чтения config/telegram-wordstat-sites.json";
+    }
+  }
   return [
     "<b>Статус бота</b>",
     `• каталог workspace (<code>WORKSPACE_ROOT</code>): <code>${escapeHtml(WORKSPACE_ROOT)}</code>`,
+    `• профиль сайта (очередь / WP для этого чата): ${siteLine}`,
     `• модель (<code>CURSOR_MODEL</code>): <code>${escapeHtml(effectiveCursorModel())}</code>`,
     `• режим агента для этого чата: <b>${escapeHtml(agentModeLabelRu(mode))}</b> (/ask · /plan · /agent)`,
     `• доступ: <code>${escapeHtml(allowMode)}</code>; ваш уровень: <code>${escapeHtml(tierLabelRu(tier))}</code>`,
@@ -1355,13 +1397,13 @@ async function buildStatusHtml(ctx: Context): Promise<string> {
   ].join("\n");
 }
 
-function resolveWordstatQueueTask(): string {
+function resolveWordstatQueueTask(childEnv?: NodeJS.ProcessEnv): string {
   const script = path.join(WORKSPACE_ROOT, "scripts", "wp-wordstat-queue-next.mjs");
   try {
     const r = spawnSync(process.execPath, [script], {
       cwd: WORKSPACE_ROOT,
       encoding: "utf-8",
-      env: process.env,
+      env: childEnv ?? process.env,
       timeout: 120_000,
     });
     if (r.status !== 0) {
@@ -1384,14 +1426,25 @@ function resolveWordstatQueueTask(): string {
   }
 }
 
-function scheduleSummaryLine(s: ChatScheduleRecord): string {
+function scheduleSummaryLine(chatIdStr: string, s: ChatScheduleRecord): string {
   if (!s.enabled) return "Расписание выключено.";
   const when = new Date(s.nextRunAt).toLocaleString("ru-RU", {
     dateStyle: "short",
     timeStyle: "short",
   });
+  const schedSite = s.wordstatSite ?? getSiteForChat(WORKSPACE_ROOT, chatIdStr);
+  let registry: ReturnType<typeof readTelegramWordstatSites>;
+  try {
+    registry = readTelegramWordstatSites(WORKSPACE_ROOT);
+  } catch {
+    registry = { defaultSite: "wordprais", sites: {} };
+  }
+  const cfg =
+    registry.sites[schedSite]?.wordstatAutomationConfig ??
+    "config/wordprais-wordstat-automation.json";
+  const label = registry.sites[schedSite]?.label ?? schedSite;
   const queueHint = s.wordstatQueue
-    ? "Режим очереди Wordstat («Вордпресс статьи»): перед каждым запуском тема берётся из config/wordprais-wordstat-automation.json."
+    ? `Режим очереди Wordstat (${label}): конфиг ${cfg}. Профиль расписания: «${schedSite}» (смена: /site_*).`
     : "";
   const tmpl = s.lastTaskText?.trim()
     ? s.wordstatQueue && s.lastTaskText.trim() === WORDSTAT_QUEUE_SENTINEL
@@ -1467,6 +1520,7 @@ async function main(): Promise<void> {
         `• /sessions или /agents — сведения о сессии · /new_agent · /reset\n` +
         `• /automations — шаблоны автоматизаций Cursor\n` +
         `• /queue_status — сводка очереди · /queue_next — предпросмотр темы без изменения файлов\n` +
+        `• /site — активный профиль сайта · /site_wordprais · /site_bytmaster34\n` +
         `• /schedule_list · /schedule · /schedule_every · /schedule_queue_every · /schedule_stop\n\n` +
         `<b>Безопасность</b>\n` +
         `Если <code>TELEGRAM_ALLOWED_CHAT_IDS</code> пуст, агент и расписания отключены для всех; доступны /whoami, меню и диагностика очереди.`,
@@ -1486,12 +1540,65 @@ async function main(): Promise<void> {
 
   bot.command("queue_status", async (ctx) => {
     if (!(await guardPeekQueue(ctx))) return;
-    await ctx.reply(readWordstatQueueDiagnostics(), html);
+    const cid = ctx.chat?.id;
+    if (cid == null) return;
+    await ctx.reply(readWordstatQueueDiagnostics(cid), html);
   });
 
   bot.command("queue_next", async (ctx) => {
     if (!(await guardPeekQueue(ctx))) return;
-    await ctx.reply(runWordstatQueuePeek(), html);
+    const cid = ctx.chat?.id;
+    if (cid == null) return;
+    await ctx.reply(runWordstatQueuePeek(cid), html);
+  });
+
+  bot.command("site", async (ctx) => {
+    if (!(await guardPeekQueue(ctx))) return;
+    const cid = ctx.chat?.id;
+    if (cid == null) return;
+    let registry: ReturnType<typeof readTelegramWordstatSites>;
+    try {
+      registry = readTelegramWordstatSites(WORKSPACE_ROOT);
+    } catch {
+      await ctx.reply(
+        "Не удалось прочитать <code>config/telegram-wordstat-sites.json</code>.",
+        html,
+      );
+      return;
+    }
+    const cur = getSiteForChat(WORKSPACE_ROOT, cid);
+    const rows = Object.entries(registry.sites)
+      .map(
+        ([key, row]) =>
+          `• <code>${escapeHtml(key)}</code> — ${escapeHtml(row.label)}`,
+      )
+      .join("\n");
+    await ctx.reply(
+      `<b>Профиль сайта для этого чата</b>\nАктивный ключ: <code>${escapeHtml(cur)}</code> — очередь Wordstat, предпросмотр и подтверждённая публикация идут в этот профиль.\n\nЗарегистрировано:\n${rows}\n\nПереключение (доступно владельцу после allowlist): /site_wordprais · /site_bytmaster34`,
+      html,
+    );
+  });
+
+  bot.command("site_wordprais", async (ctx) => {
+    if (!(await guardDangerous(ctx))) return;
+    const cid = ctx.chat?.id;
+    if (cid == null) return;
+    const k = setSiteForChat(WORKSPACE_ROOT, cid, "wordprais");
+    await ctx.reply(
+      `Профиль чата зафиксирован: <code>${escapeHtml(k)}</code>. Новые резервы очереди и публикации используют конфиг и состояние wordprais.`,
+      html,
+    );
+  });
+
+  bot.command("site_bytmaster34", async (ctx) => {
+    if (!(await guardDangerous(ctx))) return;
+    const cid = ctx.chat?.id;
+    if (cid == null) return;
+    const k = setSiteForChat(WORKSPACE_ROOT, cid, "bytmaster34");
+    await ctx.reply(
+      `Профиль чата зафиксирован: <code>${escapeHtml(k)}</code>. Очередь и пайплайн изолированы от wordprais (отдельные файлы состояния и при необходимости переменные WP с суффиксом).`,
+      html,
+    );
   });
 
   bot.command(["ask", "mode_ask"], async (ctx) => {
@@ -1596,7 +1703,7 @@ async function main(): Promise<void> {
       );
       return;
     }
-    await ctx.reply(`<b>Расписание</b>\n${escapeHtml(scheduleSummaryLine(s))}`, html);
+    await ctx.reply(`<b>Расписание</b>\n${escapeHtml(scheduleSummaryLine(id, s))}`, html);
   });
 
   bot.command("schedule", async (ctx) => {
@@ -1610,7 +1717,7 @@ async function main(): Promise<void> {
       );
       return;
     }
-    await ctx.reply(scheduleSummaryLine(s));
+    await ctx.reply(scheduleSummaryLine(id, s));
   });
 
   bot.command(["schedule_off", "schedule_stop"], async (ctx) => {
@@ -1650,6 +1757,7 @@ async function main(): Promise<void> {
     }
     const intervalMs = clampIntervalMs(msRaw);
     const id = String(ctx.chat!.id);
+    const sitePinned = getSiteForChat(WORKSPACE_ROOT, id);
     const all = await readSchedules();
     const prev = all[id];
     const now = Date.now();
@@ -1661,6 +1769,7 @@ async function main(): Promise<void> {
       lastRunAt: prev?.lastRunAt,
       lastTaskText: WORDSTAT_QUEUE_SENTINEL,
       wordstatQueue: true,
+      wordstatSite: sitePinned,
     };
     await writeSchedules(all);
     await ctx.reply(
@@ -1702,6 +1811,7 @@ async function main(): Promise<void> {
       lastRunAt: prev?.lastRunAt,
       lastTaskText: prev?.lastTaskText,
       wordstatQueue: false,
+      wordstatSite: undefined,
     };
     await writeSchedules(all);
     await ctx.reply(
@@ -1753,12 +1863,16 @@ async function main(): Promise<void> {
       }
       if (t === REPLY_KB.QUEUE_STATUS) {
         if (!(await guardPeekQueue(ctx))) return;
-        await ctx.reply(readWordstatQueueDiagnostics(), html);
+        const cid = ctx.chat?.id;
+        if (cid == null) return;
+        await ctx.reply(readWordstatQueueDiagnostics(cid), html);
         return;
       }
       if (t === REPLY_KB.QUEUE_NEXT) {
         if (!(await guardPeekQueue(ctx))) return;
-        await ctx.reply(runWordstatQueuePeek(), html);
+        const cid = ctx.chat?.id;
+        if (cid == null) return;
+        await ctx.reply(runWordstatQueuePeek(cid), html);
         return;
       }
       if (t === REPLY_KB.SCHEDULE_LIST) {
@@ -1774,7 +1888,7 @@ async function main(): Promise<void> {
           return;
         }
         await ctx.reply(
-          `<b>Расписание</b>\n${escapeHtml(scheduleSummaryLine(s))}`,
+          `<b>Расписание</b>\n${escapeHtml(scheduleSummaryLine(id, s))}`,
           html,
         );
         return;
@@ -1845,7 +1959,7 @@ async function main(): Promise<void> {
         break;
       case "queue":
         body =
-          "<b>Очередь Wordstat</b>\n• /queue_status — сводка без изменений\n• /queue_next — предпросмотр (--peek), файлы очереди не меняются\n";
+          "<b>Очередь Wordstat</b>\n• /queue_status — сводка без изменений\n• /queue_next — предпросмотр (--peek), файлы очереди не меняются\n• /site — текущий профиль · /site_wordprais · /site_bytmaster34\n";
         break;
       case "sched":
         body =
@@ -1915,15 +2029,17 @@ async function main(): Promise<void> {
         if (taskText.length < 8) {
           const template = prev?.lastTaskText?.trim();
           if (template) {
+            const queueMode =
+              prev?.wordstatQueue === true &&
+              template === WORDSTAT_QUEUE_SENTINEL;
             all[chatIdStr] = {
               enabled: true,
               intervalMs: scheduleMs,
               nextRunAt: Date.now() + scheduleMs,
               lastRunAt: prev?.lastRunAt,
               lastTaskText: template,
-              wordstatQueue:
-                prev?.wordstatQueue === true &&
-                template === WORDSTAT_QUEUE_SENTINEL,
+              wordstatQueue: queueMode,
+              wordstatSite: queueMode ? prev?.wordstatSite : undefined,
             };
             await writeSchedules(all);
             await ctx.reply(
@@ -1943,6 +2059,7 @@ async function main(): Promise<void> {
           lastRunAt: prev?.lastRunAt,
           lastTaskText: taskText,
           wordstatQueue: false,
+          wordstatSite: undefined,
         };
         await writeSchedules(all);
       }
@@ -2024,9 +2141,14 @@ async function main(): Promise<void> {
             );
             continue;
           }
+          const schedSite =
+            sch.wordstatSite ?? getSiteForChat(WORKSPACE_ROOT, chatIdStr);
           let userPlainText = sch.lastTaskText!.trim();
           if (sch.wordstatQueue === true && userPlainText === WORDSTAT_QUEUE_SENTINEL) {
-            userPlainText = resolveWordstatQueueTask();
+            const childEnv = wordstatSpawnEnv(WORKSPACE_ROOT, schedSite);
+            const task = resolveWordstatQueueTask(childEnv);
+            const hint = siteAutomationHintBlock(WORKSPACE_ROOT, schedSite).trim();
+            userPlainText = hint ? `${hint}\n\n---\n\n${task}` : task;
           }
           await executeAgentJob({
             chatIdStr,
@@ -2077,6 +2199,18 @@ async function main(): Promise<void> {
       {
         command: "queue_next",
         description: "Предпросмотр темы без записи в очередь",
+      },
+      {
+        command: "site",
+        description: "Какой профиль сайта привязан к этому чату",
+      },
+      {
+        command: "site_wordprais",
+        description: "Профиль wordprais для очереди и публикации",
+      },
+      {
+        command: "site_bytmaster34",
+        description: "Профиль bytmaster34 (изолированные файлы)",
       },
       {
         command: "publish_article",

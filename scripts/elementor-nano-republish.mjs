@@ -11,6 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { resolvePipelineStatePath } from "./wordstat-queue-core.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ART = path.join(ROOT, "artifacts");
@@ -282,9 +283,9 @@ async function main() {
   const urlStr = envUrl();
   if (!urlStr) throw new Error("MCP_KV_HTTP_URL");
 
-  const statePath = path.join(ART, "pipeline-state.json");
+  const statePath = resolvePipelineStatePath();
   if (!existsSync(statePath))
-    throw new Error("artifacts/pipeline-state.json отсутствует");
+    throw new Error(`${path.relative(ROOT, statePath)} отсутствует`);
 
   const state = JSON.parse(readFileSync(statePath, "utf-8"));
   const title =

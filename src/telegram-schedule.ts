@@ -26,6 +26,11 @@ export interface ChatScheduleRecord {
    * (lastTaskText должен быть маркером WORDSTAT_QUEUE_SENTINEL в telegram-bot.ts).
    */
   wordstatQueue?: boolean;
+  /**
+   * Профиль очереди Wordstat для изоляции второго сайта (фиксируется при /schedule_queue_every;
+   * для старых записей подставляется из карты чата).
+   */
+  wordstatSite?: string;
 }
 
 export type SchedulesFile = Record<string, ChatScheduleRecord>;

@@ -10,6 +10,20 @@ import { DEFAULT_BANNER_IN_ARTICLE } from "./assets.js";
 const ROOT = path.resolve(import.meta.dirname, "..");
 const ART = path.join(ROOT, "artifacts");
 
+function pipelineStatePathForPublish(): string {
+  const custom = process.env.PIPELINE_STATE_PATH?.trim();
+  if (custom)
+    return path.isAbsolute(custom)
+      ? custom
+      : path.join(ROOT, custom.replace(/^\/+/, ""));
+  const site = (process.env.WORDSTAT_SITE_KEY ?? "wordprais")
+    .trim()
+    .toLowerCase();
+  if (site === "bytmaster34")
+    return path.join(ART, "pipeline-state.bytmaster34.json");
+  return path.join(ART, "pipeline-state.json");
+}
+
 loadEnv({ path: path.join(ROOT, ".env") });
 const mcpKvDotenvRel = process.env.MCP_KV_DOTENV_PATH?.trim();
 if (mcpKvDotenvRel)
@@ -112,9 +126,9 @@ async function main(): Promise<void> {
   if (!envMcpKv())
     throw new Error("Задайте MCP_KV_HTTP_URL (или MCP_KV_URL) для MCP.");
 
-  const statePath = path.join(ART, "pipeline-state.json");
+  const statePath = pipelineStatePathForPublish();
   if (!existsSync(statePath))
-    throw new Error("Нет artifacts/pipeline-state.json");
+    throw new Error(`Нет ${path.relative(ROOT, statePath)}`);
 
   const state = JSON.parse(readFileSync(statePath, "utf-8")) as PipelineState;
   if (!state.seoTitle?.trim() || !state.articleHtml?.trim()) {

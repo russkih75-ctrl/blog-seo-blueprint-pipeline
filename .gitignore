@@ -7,6 +7,7 @@ dist/
 .telegram-agent-sessions.json
 .telegram-schedules.json
 .telegram-bot-chat-modes.json
+.telegram-wordstat-site-by-chat.json
 artifacts/
 vendor/
 *.log

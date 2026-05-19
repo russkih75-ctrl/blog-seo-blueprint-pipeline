@@ -18,12 +18,19 @@ import {
   mergeDurablePublishedRecord,
   normalizeQueuePhrase,
 } from "./lib/wordstat-published-state.mjs";
+import {
+  resolvePipelineStatePath,
+  resolveQueueStatePath,
+} from "./wordstat-queue-core.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ART = path.join(ROOT, "artifacts");
 const CONTENT_INDEX_PATH = path.join(ART, "content-index.json");
 const CURSOR_PATH = path.join(ART, "wordstat-queue-cursor.json");
-const SIMPLE_QUEUE_PATH = path.join(ART, "simple-keyword-queue.json");
+
+function simpleKeywordQueuePath() {
+  return resolveQueueStatePath();
+}
 
 config({ path: path.join(ROOT, ".env") });
 const mcpKvDotenvRel = process.env.MCP_KV_DOTENV_PATH?.trim();
@@ -137,7 +144,7 @@ function pushUnique(values, norm, max = 400) {
 function syncSimpleKeywordQueue(phraseRaw, processed, now) {
   const queueNorm = normalizeQueuePhrase(phraseRaw ?? "");
   if (!queueNorm) return;
-  const queue = readJsonSafe(SIMPLE_QUEUE_PATH, null);
+  const queue = readJsonSafe(simpleKeywordQueuePath(), null);
   if (!queue || typeof queue !== "object") return;
   queue.reservedPhrasesNorm = removeQueueNorm(queue.reservedPhrasesNorm ?? [], queueNorm);
   if (processed) {
@@ -151,7 +158,7 @@ function syncSimpleKeywordQueue(phraseRaw, processed, now) {
       [queueNorm]: now,
     };
   }
-  writeJsonAtomic(SIMPLE_QUEUE_PATH, queue);
+  writeJsonAtomic(simpleKeywordQueuePath(), queue);
 }
 
 function syncDurableKeywordState({
@@ -293,9 +300,9 @@ function syncDurableKeywordState({
 
 async function main() {
   mkdirSync(ART, { recursive: true });
-  const statePath = path.join(ART, "pipeline-state.json");
+  const statePath = resolvePipelineStatePath();
   if (!existsSync(statePath))
-    throw new Error("Нет artifacts/pipeline-state.json");
+    throw new Error(`Нет ${path.relative(ROOT, statePath)}`);
 
   const state = JSON.parse(readFileSync(statePath, "utf-8"));
   const pubUrl =
@@ -326,7 +333,7 @@ async function main() {
     status: pubUrl ? "published" : "pending",
     wordpressPublishedUrl: pubUrl || null,
     wordpressPostId: postId ?? null,
-    syncedFrom: "artifacts/pipeline-state.json",
+    syncedFrom: path.relative(ROOT, statePath).replace(/\\/g, "/"),
     rawSnippet:
       typeof state.wordpressPublishRaw === "string"
         ? state.wordpressPublishRaw.slice(0, 2000)

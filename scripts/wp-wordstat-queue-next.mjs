@@ -17,6 +17,9 @@ import {
   canonicalIntentForPhrase,
   evaluateKeywordSkip,
   resolveWordstatConfigPath,
+  resolveQueueStatePath,
+  resolveWordstatLastOutPath,
+  resolveWordstatLastSelectionPath,
 } from "./wordstat-queue-core.mjs";
 import {
   fetchWpRecentPublishedPosts,
@@ -32,9 +35,9 @@ const PEEK_QUEUE =
 const ART = path.join(ROOT, "artifacts");
 const CONFIG_PATH = resolveWordstatConfigPath();
 const CONTENT_INDEX_PATH = path.join(ART, "content-index.json");
-const STATE_PATH = path.join(ART, "simple-keyword-queue.json");
-const LAST_OUT_PATH = path.join(ART, "wordstat-queue-last.json");
-const LAST_SELECTION_PATH = path.join(ROOT, "data", "wordstat-queue-last-selection.json");
+const STATE_PATH = resolveQueueStatePath();
+const LAST_OUT_PATH = resolveWordstatLastOutPath();
+const LAST_SELECTION_PATH = resolveWordstatLastSelectionPath();
 
 function writeJsonAtomic(file, value) {
   mkdirSync(path.dirname(file), { recursive: true });

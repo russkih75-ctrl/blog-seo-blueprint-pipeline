@@ -23,6 +23,64 @@ export function resolveWordstatConfigPath() {
   return path.join(ROOT, "config", "wordprais-wordstat-automation.json");
 }
 
+const ALLOWED_SITE_KEYS = new Set(["wordprais", "bytmaster34"]);
+
+/** Изоляция артефактов между сайтами (Telegram / две Cloud Automation). */
+export function resolveWordstatSiteKey() {
+  const raw = (process.env.WORDSTAT_SITE_KEY ?? "wordprais").trim().toLowerCase();
+  const k = raw.replace(/[^a-z0-9_-]/g, "") || "wordprais";
+  return ALLOWED_SITE_KEYS.has(k) ? k : "wordprais";
+}
+
+export function resolveQueueStatePath() {
+  const explicit = process.env.WORDSTAT_QUEUE_STATE_PATH?.trim();
+  if (explicit)
+    return path.isAbsolute(explicit)
+      ? explicit
+      : path.join(ROOT, explicit.replace(/^\/+/, ""));
+  const site = resolveWordstatSiteKey();
+  if (site === "wordprais")
+    return path.join(ROOT, "artifacts", "simple-keyword-queue.json");
+  return path.join(ROOT, "artifacts", `simple-keyword-queue.${site}.json`);
+}
+
+export function resolveWordstatLastOutPath() {
+  const explicit = process.env.WORDSTAT_QUEUE_LAST_OUT_PATH?.trim();
+  if (explicit)
+    return path.isAbsolute(explicit)
+      ? explicit
+      : path.join(ROOT, explicit.replace(/^\/+/, ""));
+  const site = resolveWordstatSiteKey();
+  if (site === "wordprais")
+    return path.join(ROOT, "artifacts", "wordstat-queue-last.json");
+  return path.join(ROOT, "artifacts", `wordstat-queue-last.${site}.json`);
+}
+
+export function resolveWordstatLastSelectionPath() {
+  const explicit = process.env.WORDSTAT_QUEUE_LAST_SELECTION_PATH?.trim();
+  if (explicit)
+    return path.isAbsolute(explicit)
+      ? explicit
+      : path.join(ROOT, explicit.replace(/^\/+/, ""));
+  const site = resolveWordstatSiteKey();
+  if (site === "wordprais")
+    return path.join(ROOT, "data", "wordstat-queue-last-selection.json");
+  return path.join(ROOT, "data", `wordstat-queue-last-selection.${site}.json`);
+}
+
+/** Контент статьи перед публикацией — отдельный файл на сайт при WORDSTAT_SITE_KEY≠wordprais. */
+export function resolvePipelineStatePath() {
+  const explicit = process.env.PIPELINE_STATE_PATH?.trim();
+  if (explicit)
+    return path.isAbsolute(explicit)
+      ? explicit
+      : path.join(ROOT, explicit.replace(/^\/+/, ""));
+  const site = resolveWordstatSiteKey();
+  if (site === "wordprais")
+    return path.join(ROOT, "artifacts", "pipeline-state.json");
+  return path.join(ROOT, "artifacts", `pipeline-state.${site}.json`);
+}
+
 /** Базовые SEO / географические / коммерческие «надстройки» для канонизации интента. */
 const SEO_PROMO_MODIFIER_TOKENS = new Set([
   "москва",

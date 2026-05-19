@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { resolvePipelineStatePath } from "./wordstat-queue-core.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ART = path.join(ROOT, "artifacts");
@@ -587,7 +588,7 @@ async function main() {
     process.exit(1);
   }
 
-  const statePath = path.join(ART, "pipeline-state.json");
+  const statePath = resolvePipelineStatePath();
   if (!existsSync(statePath)) {
     console.error(JSON.stringify({ ok: false, error: "pipeline_state_missing" }));
     process.exit(1);

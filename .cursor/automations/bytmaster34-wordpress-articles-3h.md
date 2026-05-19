@@ -80,6 +80,14 @@ WORDPRESS_APPLICATION_PASSWORD=…
 
 ---
 
+## Один Telegram-бот и изоляция профилей
+
+Можно использовать **тот же** `TELEGRAM_BOT_TOKEN`, что и для wordprais: в чате Telegram выполните **`/site_bytmaster34`** (вернуться: **`/site_wordprais`**), статус профиля — **`/site`**. Очередь, предпросмотр (`/queue_next`), подтверждённая публикация и **`/schedule_queue_every`** опираются на выбранный профиль; файлы состояния и конфиги второго сайта **не смешиваются** с wordprais.
+
+Отдельное облачное задание Cursor «только bytmaster34» может держать в Secrets постоянно **`WORDSTAT_SITE_KEY=bytmaster34`** и при необходимости **`WORDPRESS_*_BYTMASTER34`** — карта полей в **`config/telegram-wordstat-sites.json`**.
+
+---
+
 ## mcp-kv и второй сайт
 
 В личном кабинете **mcp-kv** нужен профиль WordPress, указывающий на **https://bytmaster34.ru/** и те же учётные данные REST, что и в `WORDPRESS_*`. Не смешивайте с wordprais в одном запуске без смены секретов/профиля.

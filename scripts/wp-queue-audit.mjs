@@ -17,6 +17,7 @@ import {
   evaluateKeywordSkip,
   seoPromotionSkeleton,
   resolveWordstatConfigPath,
+  resolveQueueStatePath,
 } from "./wordstat-queue-core.mjs";
 import {
   fetchWpRecentPublishedPosts,
@@ -27,7 +28,7 @@ loadEnv({ path: path.join(ROOT, ".env") });
 
 const CONFIG_PATH = resolveWordstatConfigPath();
 const CONTENT_INDEX_PATH = path.join(ROOT, "artifacts", "content-index.json");
-const STATE_PATH = path.join(ROOT, "artifacts", "simple-keyword-queue.json");
+const STATE_PATH = resolveQueueStatePath();
 const JSON_ONLY = process.argv.includes("--json");
 
 function buildQueue(config) {
