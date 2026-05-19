@@ -99,7 +99,9 @@ export function findWpLiveDuplicateForNorm(phraseNorm, posts) {
   const norm = normalizePhrase(phraseNorm);
   if (!norm) return null;
   const tc = tokenCount(norm);
-  if (tc < 3) return null;
+  // Было tc < 3: двухсловные ключи (например «настройка wordpress») не попадали в антидубль
+  // и очередь снова резервировала интент, для которого уже есть свежий пост в ленте.
+  if (tc < 2) return null;
 
   const topicPhrase = canonicalTopicKeyWp(norm);
 
