@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const queueScript = path.join(ROOT, "scripts", "wp-wordstat-queue-next.mjs");
 const queueAuditScript = path.join(ROOT, "scripts", "wp-queue-audit.mjs");
+const SITES_REGISTRY = path.join(ROOT, "config", "telegram-wordstat-sites.json");
 
 function normTrigger(s) {
   return String(s ?? "")
@@ -18,29 +19,61 @@ function normTrigger(s) {
     .toLowerCase();
 }
 
-const rpeek = spawnSync(process.execPath, [queueScript, "--peek"], {
-  cwd: ROOT,
-  encoding: "utf-8",
-  env: { ...process.env, WORDSTAT_WP_LIVE_GUARD: "0" },
-  timeout: 120_000,
-});
+function assertPeekOk(siteKey, childEnv) {
+  const rpeek = spawnSync(process.execPath, [queueScript, "--peek"], {
+    cwd: ROOT,
+    encoding: "utf-8",
+    env: childEnv,
+    timeout: 120_000,
+  });
 
-if (rpeek.status !== 0) {
-  console.error(`FAIL: wp-wordstat-queue-next --peek exited ${rpeek.status}`);
-  process.exit(1);
+  if (rpeek.status !== 0) {
+    console.error(
+      `FAIL: wp-wordstat-queue-next --peek [${siteKey}] exited ${rpeek.status}`,
+    );
+    process.exit(1);
+  }
+
+  let jpeek;
+  try {
+    jpeek = JSON.parse(String(rpeek.stdout ?? "").trim());
+  } catch {
+    console.error(`FAIL: peek [${siteKey}] stdout is not valid JSON`);
+    process.exit(1);
+  }
+
+  if (jpeek.peek !== true) {
+    console.error(`FAIL: [${siteKey}] JSON must include peek:true`);
+    process.exit(1);
+  }
 }
 
-let jpeek;
+let sites;
 try {
-  jpeek = JSON.parse(String(rpeek.stdout ?? "").trim());
+  const reg = JSON.parse(readFileSync(SITES_REGISTRY, "utf-8"));
+  sites = reg?.sites && typeof reg.sites === "object" ? reg.sites : null;
 } catch {
-  console.error("FAIL: peek stdout is not valid JSON");
+  sites = null;
+}
+if (!sites || !Object.keys(sites).length) {
+  console.error("FAIL: config/telegram-wordstat-sites.json missing or invalid");
   process.exit(1);
 }
 
-if (jpeek.peek !== true) {
-  console.error("FAIL: JSON must include peek:true");
-  process.exit(1);
+for (const [siteKey, row] of Object.entries(sites)) {
+  const cfg = row?.wordstatAutomationConfig;
+  const pub = row?.publishedKeywordsPath;
+  if (typeof cfg !== "string" || typeof pub !== "string") {
+    console.error(`FAIL: site registry row invalid: ${siteKey}`);
+    process.exit(1);
+  }
+  assertPeekOk(siteKey, {
+    ...process.env,
+    WORDSTAT_SITE_KEY: siteKey,
+    WORDSTAT_AUTOMATION_CONFIG: cfg,
+    WORDSTAT_PUBLISHED_PATH: pub,
+    WORDSTAT_WP_LIVE_GUARD: "0",
+  });
 }
 
 const distBot = path.join(ROOT, "dist", "telegram-bot.js");
@@ -60,6 +93,9 @@ for (const needle of [
   "tgmode:ask",
   "stop_run",
   "Остановить текущий запуск",
+  "site_wordprais",
+  "site_bytmaster34",
+  "wordstatSpawnEnv",
 ]) {
   if (!distSrc.includes(needle)) {
     console.error(`FAIL: dist telegram-bot missing: ${needle}`);
@@ -126,6 +162,6 @@ if (nextId && blockedKw.includes(nextId)) {
 }
 
 console.error(
-  "OK: peek queue, queue audit anti-dup (kw_0014–0016), dist markers, triggers",
+  "OK: peek queue (all telegram-wordstat-sites), queue audit anti-dup (kw_0014–0016), dist markers, triggers",
 );
 process.exit(0);

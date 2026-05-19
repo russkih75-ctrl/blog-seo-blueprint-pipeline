@@ -13,6 +13,17 @@ export const DEFAULT_PUBLISHED_PATH = path.join(
   "data",
   "wordstat-published-keywords.json",
 );
+
+/** Durable-журнал опубликованных ключей (учитывает WORDSTAT_PUBLISHED_PATH). */
+export function resolvePublishedKeywordsPath() {
+  const rel = process.env.WORDSTAT_PUBLISHED_PATH?.trim();
+  if (rel)
+    return path.isAbsolute(rel)
+      ? rel
+      : path.join(ROOT, rel.replace(/^\/+/, ""));
+  return DEFAULT_PUBLISHED_PATH;
+}
+
 export const SEO_SITE_PROMOTION_INTENT = "intent:seo_site_promotion_general";
 
 /** Очередь Wordstat: `WORDSTAT_AUTOMATION_CONFIG` или дефолт wordprais. */

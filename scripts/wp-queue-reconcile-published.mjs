@@ -9,15 +9,18 @@
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { config as loadEnv } from "dotenv";
 import {
   mergeDurablePublishedRecord,
   normalizeQueuePhrase,
 } from "./lib/wordstat-published-state.mjs";
+import {
+  ROOT,
+  resolveQueueStatePath,
+  resolvePublishedKeywordsPath,
+} from "./wordstat-queue-core.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const ART = path.join(ROOT, "artifacts");
-const SIMPLE_QUEUE_PATH = path.join(ART, "simple-keyword-queue.json");
+loadEnv({ path: path.join(ROOT, ".env") });
 
 function readJsonSafe(file, fallback) {
   try {
@@ -90,7 +93,9 @@ function main() {
     source: "cli_wp_queue_reconcile_published",
   });
 
-  const queue = readJsonSafe(SIMPLE_QUEUE_PATH, {
+  const simpleQueuePath = resolveQueueStatePath();
+
+  const queue = readJsonSafe(simpleQueuePath, {
     version: 1,
     reservedPhrasesNorm: [],
     processedPhrasesNorm: [],
@@ -111,7 +116,7 @@ function main() {
     keywordId,
     at: now,
   };
-  writeJsonAtomic(SIMPLE_QUEUE_PATH, queue);
+  writeJsonAtomic(simpleQueuePath, queue);
 
   console.log(
     JSON.stringify(
@@ -120,8 +125,10 @@ function main() {
         phraseNorm: qn,
         postId,
         publicUrl: url,
-        durableRelative: "data/wordstat-published-keywords.json",
-        simpleQueueRelative: path.relative(ROOT, SIMPLE_QUEUE_PATH),
+        durableRelative: path
+          .relative(ROOT, resolvePublishedKeywordsPath())
+          .replace(/\\/g, "/"),
+        simpleQueueRelative: path.relative(ROOT, simpleQueuePath).replace(/\\/g, "/"),
       },
       null,
       2,

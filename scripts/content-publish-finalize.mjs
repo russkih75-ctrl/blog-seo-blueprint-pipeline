@@ -21,6 +21,7 @@ import {
 import {
   resolvePipelineStatePath,
   resolveQueueStatePath,
+  resolveWordstatLastOutPath,
 } from "./wordstat-queue-core.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -272,7 +273,7 @@ function syncDurableKeywordState({
           ? pipelineWordstatKeywordId.trim()
           : null;
       if (!keywordId) {
-        const lastQ = readJsonSafe(path.join(ART, "wordstat-queue-last.json"), null);
+        const lastQ = readJsonSafe(resolveWordstatLastOutPath(), null);
         if (
           lastQ &&
           typeof lastQ.phrase === "string" &&

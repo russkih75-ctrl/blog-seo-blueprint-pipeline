@@ -8,7 +8,6 @@ import path from "node:path";
 import { config as loadEnv } from "dotenv";
 import {
   ROOT,
-  DEFAULT_PUBLISHED_PATH,
   readJsonSafe,
   normalizePhrase,
   sortQueueForSelection,
@@ -20,6 +19,7 @@ import {
   resolveQueueStatePath,
   resolveWordstatLastOutPath,
   resolveWordstatLastSelectionPath,
+  resolvePublishedKeywordsPath,
 } from "./wordstat-queue-core.mjs";
 import {
   fetchWpRecentPublishedPosts,
@@ -165,8 +165,7 @@ async function main() {
   const config = readJsonSafe(CONFIG_PATH, null);
   if (!config) throw new Error(`Missing config: ${CONFIG_PATH}`);
 
-  const publishedPath =
-    process.env.WORDSTAT_PUBLISHED_PATH?.trim() || DEFAULT_PUBLISHED_PATH;
+  const publishedPath = resolvePublishedKeywordsPath();
   const pub = loadPublishedKeywordsState(publishedPath);
 
   const clustersById = new Map(

@@ -6,7 +6,6 @@ import path from "node:path";
 import { config as loadEnv } from "dotenv";
 import {
   ROOT,
-  DEFAULT_PUBLISHED_PATH,
   SEO_SITE_PROMOTION_INTENT,
   readJsonSafe,
   normalizePhrase,
@@ -18,6 +17,7 @@ import {
   seoPromotionSkeleton,
   resolveWordstatConfigPath,
   resolveQueueStatePath,
+  resolvePublishedKeywordsPath,
 } from "./wordstat-queue-core.mjs";
 import {
   fetchWpRecentPublishedPosts,
@@ -97,8 +97,7 @@ function selectNextKeyword(sortedQueue, ctx) {
 }
 
 async function main() {
-  const publishedPath =
-    process.env.WORDSTAT_PUBLISHED_PATH?.trim() || DEFAULT_PUBLISHED_PATH;
+  const publishedPath = resolvePublishedKeywordsPath();
   const config = readJsonSafe(CONFIG_PATH, null);
   if (!config) throw new Error(`Missing config: ${CONFIG_PATH}`);
 

@@ -2,11 +2,13 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { config as loadEnv } from "dotenv";
+import { ROOT, resolveWordstatLastOutPath } from "./wordstat-queue-core.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+loadEnv({ path: path.join(ROOT, ".env") });
+
 const ART = path.join(ROOT, "artifacts");
-const LAST_OUT_PATH = path.join(ART, "wordstat-queue-last.json");
+const LAST_OUT_PATH = resolveWordstatLastOutPath();
 const RUN_LOG_PATH = path.join(ART, "workflow-wordstat-next.json");
 
 const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
@@ -43,7 +45,7 @@ if (!reusePending || existingLast?.mode !== "topic" || !String(existingLast?.phr
   run(npmCmd, ["run", "wp:wordstat-queue-next"]);
 }
 if (!existsSync(LAST_OUT_PATH)) {
-  throw new Error("wordstat-queue-last.json was not written");
+  throw new Error(`${path.basename(LAST_OUT_PATH)} was not written`);
 }
 
 const next = readJson(LAST_OUT_PATH);

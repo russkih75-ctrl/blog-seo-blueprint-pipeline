@@ -185,7 +185,7 @@ npm run scenario:wordpress-articles
 
 Проверка **публичного** URL поста без WordPress-секретов: **`npm run wp:verify-published -- '<https-URL-страницы>'`** (или переменная **`WP_VERIFY_PUBLISHED_URL`**).
 
-Опционально: **`WORDSTAT_AUTOMATION_CONFIG`** — путь к своей копии JSON-конфига очереди; **`WORDSTAT_PUBLISHED_PATH`** — отдельный файл durable-ключей для второго сайта (см. **`.cursor/automations/bytmaster34-wordpress-articles-3h.md`**).
+Опционально: **`WORDSTAT_AUTOMATION_CONFIG`** — путь к JSON-конфига очереди; **`WORDSTAT_PUBLISHED_PATH`** — durable-журнал ключей; **`WORDSTAT_SITE_KEY`** (`wordprais` или `bytmaster34`) — суффиксы **`simple-keyword-queue`**, **`wordstat-queue-last`**, **`pipeline-state`** (см. **`.cursor/automations/bytmaster34-wordpress-articles-3h.md`**). Один процесс Telegram-бота: **`/site`** · **`/site_wordprais`** · **`/site_bytmaster34`**, карта **`config/telegram-wordstat-sites.json`**.
 
 Уточнение по **`content:finalize-publish`**: run берётся из **`CONTENT_RUN_ID`**, затем из **`pipeline-state.json` → `contentRunId`** (проставляется **`seed:elementor`** / **`wp:publish-streamable`** при заданном **`CONTENT_RUN_ID`**), иначе — **самая новая** запись в **`content-index.json`** по полю **`createdAt`** (раньше ошибочно бралась самая старая).
 

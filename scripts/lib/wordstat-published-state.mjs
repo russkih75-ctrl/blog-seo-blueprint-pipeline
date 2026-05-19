@@ -6,14 +6,23 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { normalizePhrase } from "../wordstat-queue-core.mjs";
+import {
+  normalizePhrase,
+  resolvePublishedKeywordsPath,
+} from "../wordstat-queue-core.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+/** @deprecated используйте resolvePublishedKeywordsPath() из wordstat-queue-core */
 export const DURABLE_PUBLISHED_PATH = path.join(
   ROOT,
   "data",
   "wordstat-published-keywords.json",
 );
+
+function durablePath() {
+  return resolvePublishedKeywordsPath();
+}
 
 /** Общая нормализация с wordstat-queue-core (дефисы → пробелы, сайт→сайта, …). */
 export function normalizeQueuePhrase(text) {
@@ -37,7 +46,7 @@ function writeJsonAtomic(file, value) {
 }
 
 export function readDurablePublished() {
-  const raw = readJsonSafe(DURABLE_PUBLISHED_PATH, null);
+  const raw = readJsonSafe(durablePath(), null);
   if (!raw || typeof raw !== "object")
     return { version: 1, updatedAt: null, processedPhrasesNorm: [], records: [] };
   return {
@@ -64,7 +73,7 @@ export function mergeDurablePublishedRecord(p) {
   if (!norm) return readDurablePublished();
 
   const now = new Date().toISOString();
-  const rawFull = readJsonSafe(DURABLE_PUBLISHED_PATH, {}) ?? {};
+  const rawFull = readJsonSafe(durablePath(), {}) ?? {};
   const data = readDurablePublished();
   const records = Array.isArray(data.records) ? [...data.records] : [];
 
@@ -88,7 +97,7 @@ export function mergeDurablePublishedRecord(p) {
     processedPhrasesNorm: pushUniqueNorm(data.processedPhrasesNorm, norm),
     records,
   };
-  writeJsonAtomic(DURABLE_PUBLISHED_PATH, out);
+  writeJsonAtomic(durablePath(), out);
   return readDurablePublished();
 }
 
