@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "notes": "Durable опубликованные ключи bytmaster34.ru/blog — не брать повторно. Обновлять после verified-публикации (npm run wp:queue-reconcile-published и переменные ниже).",
+  "updatedAt": null,
+  "blockedIntents": [],
+  "processedPhrasesNorm": [],
+  "records": []
+}

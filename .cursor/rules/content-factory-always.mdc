@@ -1,0 +1,23 @@
+---
+description: Content Factory — локальный пайплайн SEO/GEO/нейропоиска для статей
+alwaysApply: true
+---
+
+## Content Factory (репозиторий)
+
+Если задача связана с **статьёй, нишей, ключами, SEO, GEO, публикацией в WordPress, антидублём, IndexNow, Метлой** — используй оркестрацию **Director Content Factory**:
+
+1. Прочитай `config/agent-orchestration.json`, `config/default-article-style.json`, навык `.cursor/skills/director-content-factory/SKILL.md`.
+2. Запуск каркаса CLI (dry-run по умолчанию): `npm run content:run -- --niche "..." --keywords "..."`.
+3. Веди состояние в `artifacts/content-runs/<runId>/handoff.json`; финальный текст — `article.md`, метаданные — `seo.json`.
+4. **Duplicate & Canonical** обязателен до публикации (`duplicate-guardian`, `artifacts/content-index.json`).
+5. Публикация WordPress: предпочти существующий **`npm run workflow:cloud`** / MCP `wordpress_*` из `src/run-workflow-cloud.ts`; не дублируй полный WP-пайплайн без нужды.
+6. Humanizer — обязательная стадия (`.cursor/skills/russian-humanizer-seo/SKILL.md`).
+7. Supervisor QA — до **3** итераций правок по чеклисту в `qa-report.json`.
+
+### Референсы (критично)
+
+- **Любой URL статьи-образца** — только **структура, стиль, ритм, формат блоков и ориентир по объёму** (`referenceUsage=structure_style_length_only`). **Не** источник фактов, **не** источник иллюстраций для статьи; текст **не копировать**. Факты — только Research из нишеевых источников.
+- **Обложка и горизонтальный баннер** — отдельный **user-provided** референс изображения **с лицом**; лицо и идентичность **не менять** (`identity_lock=true`, промпты Nano по blueprint RU SEO-GEO 2026 для композиции/фона/одежды вне identity).
+
+Не смешивай роли: каждый этап — отдельный контекст и артефакт.

@@ -1,0 +1,2257 @@
+/**
+ * Telegram → локальный Cursor Agent (@cursor/sdk), один agentId на chat_id.
+ */
+import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  readdirSync,
+  writeFileSync,
+} from "node:fs";
+import { homedir } from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { config as loadEnv } from "dotenv";
+import { Bot, InlineKeyboard, Keyboard, type Api, type Context } from "grammy";
+import {
+  Agent,
+  type McpServerConfig,
+  type SDKAgent,
+  type SDKMessage,
+} from "@cursor/sdk";
+import {
+  clampIntervalMs,
+  formatIntervalRu,
+  matchNaturalSchedule,
+  parseScheduleEveryArg,
+  readSchedulesFile,
+  SCHEDULE_MAX_MS,
+  SCHEDULE_MIN_MS,
+  stripMatchedSchedule,
+  type ChatScheduleRecord,
+  type SchedulesFile,
+  writeSchedulesFile,
+} from "./telegram-schedule.js";
+import {
+  getSiteForChat,
+  setSiteForChat,
+  readTelegramWordstatSites,
+  siteAutomationHintBlock,
+  wordstatSpawnEnv,
+} from "./telegram-wordstat-sites.js";
+
+const ROOT = path.resolve(import.meta.dirname, "..");
+loadEnv({ path: path.join(ROOT, ".env") });
+
+const mcpKvDotenvRel = process.env.MCP_KV_DOTENV_PATH?.trim();
+if (mcpKvDotenvRel) {
+  loadEnv({ path: path.resolve(ROOT, mcpKvDotenvRel), override: true });
+}
+
+const mcpKvUrlFile = process.env.MCP_KV_HTTP_URL_FILE?.trim();
+if (mcpKvUrlFile) {
+  const uf = path.resolve(ROOT, mcpKvUrlFile);
+  if (existsSync(uf)) {
+    const line = readFileSync(uf, "utf-8").trim().split(/\r?\n/)[0]?.trim();
+    if (line) process.env.MCP_KV_HTTP_URL = line;
+  }
+}
+const mcpKvBearerFile = process.env.MCP_KV_HTTP_BEARER_FILE?.trim();
+if (mcpKvBearerFile) {
+  const bf = path.resolve(ROOT, mcpKvBearerFile);
+  if (existsSync(bf)) {
+    const line = readFileSync(bf, "utf-8").trim().split(/\r?\n/)[0]?.trim();
+    if (line) process.env.MCP_KV_HTTP_BEARER = line;
+  }
+}
+
+/** Заголовки mcp-kv из локального Cursor ~/.cursor/mcp.json (если URL оттуда подставлен). */
+let gTelegramCursorMcpKvHeaders: Record<string, string> | undefined;
+
+function telegramCursorMcpJsonPath(): string {
+  const custom = process.env.CURSOR_MCP_JSON_PATH?.trim();
+  if (custom)
+    return path.isAbsolute(custom) ? custom : path.resolve(ROOT, custom);
+  return path.join(homedir(), ".cursor", "mcp.json");
+}
+
+function hydrateTelegramMcpKvFromCursorMcpJson(): void {
+  const hasUrl =
+    process.env.MCP_KV_HTTP_URL?.trim() || process.env.MCP_KV_URL?.trim();
+  if (hasUrl) return;
+  const jsonPath = telegramCursorMcpJsonPath();
+  if (!existsSync(jsonPath)) return;
+  try {
+    const raw = JSON.parse(readFileSync(jsonPath, "utf-8")) as {
+      mcpServers?: Record<
+        string,
+        { url?: string; headers?: Record<string, string> }
+      >;
+    };
+    const s =
+      raw.mcpServers?.["mcp-kv"] ??
+      raw.mcpServers?.mcp_kv ??
+      raw.mcpServers?.mcpkv;
+    const u = s?.url?.trim();
+    if (!u || !s) return;
+    process.env.MCP_KV_HTTP_URL = u;
+    if (s.headers && Object.keys(s.headers).length > 0)
+      gTelegramCursorMcpKvHeaders = { ...s.headers };
+    const masked = u.replace(/(user-)[A-Za-z0-9_-]+/i, "$1***");
+    console.error(
+      `[telegram-bot] mcp-kv endpoint из ${jsonPath} → ${masked} (${/\/sse\//i.test(u) ? "sse" : "http"})`,
+    );
+  } catch {
+    /* noop */
+  }
+}
+
+hydrateTelegramMcpKvFromCursorMcpJson();
+
+function resolveWorkspaceRoot(): string {
+  const w = process.env.WORKSPACE_ROOT?.trim();
+  if (w) return path.resolve(w);
+  if (existsSync("/workspace")) return path.resolve("/workspace");
+  return path.resolve(process.cwd());
+}
+
+const WORKSPACE_ROOT = resolveWorkspaceRoot();
+
+const SESSIONS_PATH = path.join(WORKSPACE_ROOT, ".telegram-agent-sessions.json");
+const SCHEDULES_PATH = path.join(WORKSPACE_ROOT, ".telegram-schedules.json");
+const MODES_PATH = path.join(WORKSPACE_ROOT, ".telegram-bot-chat-modes.json");
+
+/** Прямая ссылка на страницу автоматизации в UI Cursor (нельзя выключить из Telegram без API). */
+const CURSOR_CLOUD_AUTOMATION_UI_URL =
+  "https://cursor.com/automations/059ecb27-eff3-416d-82e9-f894f4c56acb";
+
+type AgentMode = "agent" | "ask" | "plan";
+
+/** Маркер в lastTaskText: подставить актуальное ТЗ из очереди Wordstat. */
+const WORDSTAT_QUEUE_SENTINEL = "__WP_WORDSTAT_QUEUE_V1__";
+
+const TELEGRAM_HTML_MAX = 4096;
+
+const DEFAULT_BOT_TIMEZONE = "Europe/Moscow";
+const DEFAULT_CURSOR_MODEL = "composer-2";
+
+/** Время старта процесса (uptime в /status). */
+let botProcessStartedAt = Date.now();
+
+/** Пульс фазы «работа» — редактирование одного сообщения раз в 45–60 с. */
+const WORKING_PULSE_MS = 52_000;
+
+interface SessionRecord {
+  agentId: string;
+  personaHash?: string;
+}
+
+type SessionsFile = Record<string, SessionRecord>;
+
+const busyChats = new Set<string>();
+
+class Mutex {
+  private mutex: Promise<void> = Promise.resolve();
+  runExclusive<T>(fn: () => Promise<T>): Promise<T> {
+    const prev = this.mutex;
+    let unlock!: () => void;
+    this.mutex = new Promise<void>((resolve) => {
+      unlock = resolve;
+    });
+    return prev.then(() => fn()).finally(() => {
+      unlock();
+    });
+  }
+}
+
+const sessionMutex = new Mutex();
+const scheduleMutex = new Mutex();
+const modeMutex = new Mutex();
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Подписи reply-клавиатуры (отправляются текстом; обрабатываются до агента). */
+const REPLY_KB = {
+  MENU: "Меню",
+  STATUS: "Статус бота",
+  WHOAMI: "Мой chat_id",
+  SESSIONS: "Сессия агента",
+  QUEUE_STATUS: "Очередь Wordstat",
+  QUEUE_NEXT: "Следующая тема",
+  SCHEDULE_LIST: "Расписание",
+  AUTOMATIONS: "Автоматизации",
+  PUBLISH_ARTICLE: "Опубликовать статью",
+  STOP_AUTOMATION: "Остановить автоматизацию",
+  STOP_CURRENT_RUN: "Остановить текущий запуск",
+} as const;
+
+function isReplyKeyboardShortcut(text: string): boolean {
+  const t = text.trim();
+  return (Object.values(REPLY_KB) as string[]).includes(t);
+}
+
+function chunkForTelegram(htmlBody: string, max = TELEGRAM_HTML_MAX - 32): string[] {
+  if (htmlBody.length <= max) return [htmlBody];
+  const out: string[] = [];
+  let i = 0;
+  while (i < htmlBody.length) {
+    let end = Math.min(i + max, htmlBody.length);
+    if (end < htmlBody.length) {
+      const slice = htmlBody.slice(i, end);
+      const nl = slice.lastIndexOf("\n");
+      if (nl > max * 0.55) end = i + nl + 1;
+    }
+    out.push(htmlBody.slice(i, end));
+    i = end;
+  }
+  return out;
+}
+
+function renderProgressBar(pct: number): string {
+  const n = Math.max(0, Math.min(100, Math.round(pct)));
+  const segs = 10;
+  const filled = Math.round((n / 100) * segs);
+  const bar = "\u2588".repeat(filled) + "\u2591".repeat(segs - filled);
+  return `[${bar}] ${n}%`;
+}
+
+/** Одно служебное сообщение на задачу: правки и удаление по завершении. */
+class TaskStatusCard {
+  private messageId: number | undefined;
+  private workingPct = 48;
+
+  constructor(
+    private readonly api: Api,
+    private readonly chatId: number,
+  ) {}
+
+  private formatHtml(headline: string, pct: number): string {
+    const barLine = escapeHtml(renderProgressBar(pct));
+    return `<b>${escapeHtml(headline)}</b>\n\n<code>${barLine}</code>`;
+  }
+
+  async open(headline: string, pct: number): Promise<void> {
+    try {
+      const msg = await this.api.sendMessage(this.chatId, this.formatHtml(headline, pct), {
+        parse_mode: "HTML",
+      });
+      this.messageId = msg.message_id;
+    } catch {
+      this.messageId = undefined;
+    }
+  }
+
+  async update(headline: string, pct: number): Promise<void> {
+    if (this.messageId === undefined) return;
+    try {
+      await this.api.editMessageText(this.chatId, this.messageId, this.formatHtml(headline, pct), {
+        parse_mode: "HTML",
+      });
+    } catch {
+      /* мягко игнорируем лимиты Telegram / совпадение текста */
+    }
+  }
+
+  /** Плавное увеличение прогресса в фазе «работа». */
+  async pulseWorking(headline: string): Promise<void> {
+    this.workingPct = Math.min(80, this.workingPct + 7);
+    await this.update(headline, this.workingPct);
+  }
+
+  resetWorkingFloor(): void {
+    this.workingPct = 48;
+  }
+
+  async showError(detailHtml: string): Promise<void> {
+    const body = `<b>Ошибка выполнения.</b>\n\n${detailHtml}`;
+    if (this.messageId === undefined) {
+      try {
+        await this.api.sendMessage(this.chatId, body, { parse_mode: "HTML" });
+      } catch {
+        /* noop */
+      }
+      return;
+    }
+    try {
+      await this.api.editMessageText(this.chatId, this.messageId, body, {
+        parse_mode: "HTML",
+      });
+    } catch {
+      try {
+        await this.api.sendMessage(this.chatId, body, { parse_mode: "HTML" });
+      } catch {
+        /* noop */
+      }
+    }
+  }
+
+  async remove(): Promise<void> {
+    if (this.messageId === undefined) return;
+    const mid = this.messageId;
+    this.messageId = undefined;
+    try {
+      await this.api.deleteMessage(this.chatId, mid);
+    } catch {
+      /* noop */
+    }
+  }
+}
+
+function readSessions(): SessionsFile {
+  try {
+    if (!existsSync(SESSIONS_PATH)) return {};
+    const raw = readFileSync(SESSIONS_PATH, "utf-8");
+    const j = JSON.parse(raw) as SessionsFile;
+    return j && typeof j === "object" ? j : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSessions(data: SessionsFile): void {
+  mkdirSync(path.dirname(SESSIONS_PATH), { recursive: true });
+  const tmp = `${SESSIONS_PATH}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify(data, null, 2), "utf-8");
+  renameSync(tmp, SESSIONS_PATH);
+}
+
+function readModesFile(): Record<string, AgentMode> {
+  try {
+    if (!existsSync(MODES_PATH)) return {};
+    const raw = readFileSync(MODES_PATH, "utf-8");
+    const j = JSON.parse(raw) as Record<string, string>;
+    if (!j || typeof j !== "object") return {};
+    const out: Record<string, AgentMode> = {};
+    for (const [k, v] of Object.entries(j)) {
+      if (v === "ask" || v === "plan" || v === "agent") out[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function writeModesFile(data: Record<string, AgentMode>): void {
+  mkdirSync(path.dirname(MODES_PATH), { recursive: true });
+  const tmp = `${MODES_PATH}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify(data, null, 2), "utf-8");
+  renameSync(tmp, MODES_PATH);
+}
+
+async function getChatMode(chatIdStr: string): Promise<AgentMode> {
+  return modeMutex.runExclusive(async () => {
+    const m = readModesFile();
+    const v = m[chatIdStr];
+    return v === "ask" || v === "plan" ? v : "agent";
+  });
+}
+
+async function setChatMode(chatIdStr: string, mode: AgentMode): Promise<void> {
+  await modeMutex.runExclusive(async () => {
+    const m = readModesFile();
+    m[chatIdStr] = mode;
+    writeModesFile(m);
+  });
+}
+
+function normalizeTriggerPhrase(text: string): string {
+  return text.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function isExactPublishIntent(text: string): boolean {
+  const n = normalizeTriggerPhrase(text);
+  return n === "опубликуй статью" || n === "опубликовать статью";
+}
+
+function isExactStopAutomationIntent(text: string): boolean {
+  return normalizeTriggerPhrase(text) === "остановить автоматизацию";
+}
+
+function isExactStopCurrentRunIntent(text: string): boolean {
+  return normalizeTriggerPhrase(text) === "остановить текущий запуск";
+}
+
+function redactSecretsFromLog(s: string): string {
+  return s
+    .replace(/Bearer\s+\S+/gi, "Bearer [скрыто]")
+    .replace(/crsr_[a-zA-Z0-9]+/gi, "[скрыто]")
+    .slice(0, 500);
+}
+
+function runWordstatQueueNextReserve(childEnv?: NodeJS.ProcessEnv): {
+  ok: boolean;
+  code: number | null;
+  json?: Record<string, unknown>;
+  detail?: string;
+} {
+  const script = path.join(WORKSPACE_ROOT, "scripts", "wp-wordstat-queue-next.mjs");
+  const r = spawnSync(process.execPath, [script], {
+    cwd: WORKSPACE_ROOT,
+    encoding: "utf-8",
+    env: childEnv ?? process.env,
+    timeout: 240_000,
+  });
+  const code = r.status;
+  const stderr = redactSecretsFromLog(String(r.stderr ?? "").trim());
+  const stdout = String(r.stdout ?? "").trim();
+  if (code !== 0) {
+    return {
+      ok: false,
+      code: code ?? -1,
+      detail: stderr || `код выхода ${code}`,
+    };
+  }
+  try {
+    const json = JSON.parse(stdout) as Record<string, unknown>;
+    return { ok: true, code: 0, json };
+  } catch {
+    return {
+      ok: false,
+      code: code ?? -1,
+      detail: "вывод скрипта не является JSON",
+    };
+  }
+}
+
+function sanitizeQueueJsonForPrompt(j: Record<string, unknown>): string {
+  const copy: Record<string, unknown> = { ...j };
+  if (typeof copy.taskRu === "string" && copy.taskRu.length > 8000) {
+    copy.taskRu = `${copy.taskRu.slice(0, 8000)}\n…[усечено]`;
+  }
+  return JSON.stringify(copy, null, 2);
+}
+
+function buildWordpressPublishPipelinePrompt(
+  queueJson: Record<string, unknown>,
+  siteKey: string,
+): string {
+  const hint = siteAutomationHintBlock(WORKSPACE_ROOT, siteKey);
+  const registry = readTelegramWordstatSites(WORKSPACE_ROOT);
+  const label = registry.sites[siteKey]?.label ?? siteKey;
+  const safe = sanitizeQueueJsonForPrompt(queueJson);
+  return [
+    hint,
+    "",
+    "Ты работаешь в репозитории blog-seo-blueprint-pipeline как Cursor Agent.",
+    "",
+    "Уже выполнено для этого запуска из Telegram: **`npm run wp:wordstat-queue-next`** (следующий ключ очереди зарезервирован там, где это предусмотрено скриптом — не запускай команду повторно без причины).",
+    "",
+    "Результат команды (JSON):",
+    "```json",
+    safe,
+    "```",
+    "",
+    `Дальше действуй по регламенту автоматизации «Вордпресс статьи» (файл \`.cursor/automations/wordpress-articles-wordstat-3h.md\`, \`prompts/wordpress-articles/MASTER_PROMPT.md\`, правила медиа 16:9 / 21:9). Целевой сайт и ссылки — из **config/wordpress-articles.json** после \\\`npm run site:${siteKey === "bytmaster34" ? "bytmaster34" : "wordprais"}\\\`; домен ориентира: **${label}**.`,
+    "- При необходимости: `npm ci` и `npm run build`.",
+    '- Если `mode === "semantic_refill"` — выполни инструкции из `taskRu`, новую статью в прод в этом запуске не публикуй, если очередь не готова.',
+    `- Если \`mode === "topic"\` — используй \`taskRu\` как основное ТЗ и доведи до опубликованной статьи на ${label}.`,
+    "- Когда контент и медиа соответствуют политике: **`npm run scenario:wordpress-articles-with-nano`** (или **`npm run scenario:wordpress-articles`**, если nano уже не нужен по регламенту). Перед этим экспортируй **WORDSTAT_SITE_KEY** и пути очереди как в блоке выше.",
+    "- Не раскрывай секреты и полные токены в ответе пользователю.",
+    "",
+    "В конце дай краткий отчёт: mode, phrase или причина refill, URL поста или почему остановились.",
+  ].join("\n");
+}
+
+function agentModeLabelRu(mode: AgentMode): string {
+  switch (mode) {
+    case "ask":
+      return "Ask — вопросы и диагностика без правок файлов";
+    case "plan":
+      return "Plan — только план, без выполнения";
+    default:
+      return "Agent — обычная автономная работа";
+  }
+}
+
+function buildRestrictedModePrefix(mode: Exclude<AgentMode, "agent">): string {
+  const utcIso = new Date().toISOString();
+  let timeLine = `<time>${utcIso}</time> (UTC)`;
+  const tz = process.env.BOT_TIMEZONE?.trim() || DEFAULT_BOT_TIMEZONE;
+  try {
+    const local = new Intl.DateTimeFormat("en-GB", {
+      timeZone: tz,
+      dateStyle: "medium",
+      timeStyle: "long",
+    }).format(new Date());
+    timeLine += `\nLocal (${tz}): ${local}`;
+  } catch {
+    timeLine += `\n(некорректная BOT_TIMEZONE)`;
+  }
+  const core =
+    mode === "ask"
+      ? [
+          "## Режим Ask",
+          "Ответь на запрос как консультант: пояснения, диагностика, ссылки на файлы и практики.",
+          "Запрещено без нового явного поручения пользователя: менять файлы в workspace, выполнять терминальные команды (npm, git и т.д.), публиковать материалы, делать commit или push.",
+        ].join("\n")
+      : [
+          "## Режим Plan",
+          "Дай пошаговый план решения без выполнения действий.",
+          "Запрещено: менять файлы, выполнять команды, публикации, commit/push.",
+        ].join("\n");
+  return `${core}\n\n${timeLine}\n\n---\n\n`;
+}
+
+async function replyPublishConfirmation(ctx: Context): Promise<void> {
+  if (!(await guardDangerous(ctx))) return;
+  await ctx.reply(
+    `<b>Публикация статьи из очереди Wordstat</b>\n\nШаг 1: резерв ключа через <code>npm run wp:wordstat-queue-next</code>. Шаг 2: полный цикл агента и npm-сценарии, как в автоматизации «Вордпресс статьи».\n\nЧтобы <b>подтвердить</b>, отправьте:\n<code>/publish_article_confirm</code>\n\nЕсли передумали — не отправляйте подтверждение.`,
+    { parse_mode: "HTML" },
+  );
+}
+
+async function replyStopCurrentRunNotice(ctx: Context): Promise<void> {
+  if (!(await guardDangerous(ctx))) return;
+  const id = String(ctx.chat!.id);
+  if (busyChats.delete(id)) {
+    await ctx.reply(
+      "<b>Снята блокировка «занято»</b> для этого чата. Ответ по предыдущему запросу к агенту может ещё прийти из Cursor SDK; новые сообщения снова принимаются.",
+      { parse_mode: "HTML" },
+    );
+  } else {
+    await ctx.reply("Сейчас нет активной задачи в боте (флаг занятости не был установлен).", {
+      parse_mode: "HTML",
+    });
+  }
+}
+
+async function replyStopAutomationNotice(ctx: Context): Promise<void> {
+  if (!(await guardDangerous(ctx))) return;
+  const id = String(ctx.chat!.id);
+  const all = await readSchedules();
+  const s = all[id];
+  const had = Boolean(s);
+  if (s) {
+    s.enabled = false;
+    all[id] = s;
+    await writeSchedules(all);
+  }
+  const local = had
+    ? "Локальные расписания этого чата в боте <b>остановлены</b> (шаблон сохранён)."
+    : "Активных локальных расписаний для этого чата не было.";
+  await ctx.reply(
+    `${local}\n\nОблачную автоматизацию Cursor (<b>Automations</b>) нельзя выключить из Telegram без отдельного API — отключите вручную в интерфейсе:\n<a href="${CURSOR_CLOUD_AUTOMATION_UI_URL}">Открыть страницу автоматизации в Cursor</a>`,
+    { parse_mode: "HTML" },
+  );
+}
+
+async function runConfirmedPublishArticle(
+  ctx: Context,
+  apiKey: string,
+  modelId: string,
+  mcpServers: Record<string, McpServerConfig> | undefined,
+): Promise<void> {
+  const chatIdStr = String(ctx.chat!.id);
+  const chatIdNum = ctx.chat!.id;
+  if (!(await guardDangerous(ctx))) return;
+  if (busyChats.has(chatIdStr)) {
+    await ctx.reply(
+      "Уже выполняется задача (в том числе публикация). Дождитесь завершения.",
+    );
+    return;
+  }
+  if (!apiKey.trim()) {
+    await ctx.reply(MSG_NO_CURSOR_API_KEY, { parse_mode: "HTML" });
+    return;
+  }
+  busyChats.add(chatIdStr);
+  try {
+    const site = getSiteForChat(WORKSPACE_ROOT, chatIdStr);
+    const childEnv = wordstatSpawnEnv(WORKSPACE_ROOT, site);
+    await ctx.reply(
+      `Выполняю резерв ключа: <code>npm run wp:wordstat-queue-next</code> (профиль <code>${escapeHtml(site)}</code>)…`,
+      { parse_mode: "HTML" },
+    );
+    const rq = runWordstatQueueNextReserve(childEnv);
+    if (!rq.ok || !rq.json) {
+      await ctx.reply(
+        `<b>Очередь Wordstat</b>\nНе удалось получить JSON после резерва (код ${rq.code ?? "?"}). ${rq.detail ? `<pre>${escapeHtml(rq.detail)}</pre>` : ""}`,
+        { parse_mode: "HTML" },
+      );
+      return;
+    }
+    await executeAgentJob({
+      chatIdStr,
+      chatIdNum: chatIdNum!,
+      userPlainText: buildWordpressPublishPipelinePrompt(rq.json, site),
+      api: ctx.api,
+      apiKey,
+      modelId,
+      mcpServers,
+      agentMode: "agent",
+    });
+  } finally {
+    busyChats.delete(chatIdStr);
+  }
+}
+
+async function readSchedules(): Promise<SchedulesFile> {
+  return scheduleMutex.runExclusive(async () => readSchedulesFile(SCHEDULES_PATH));
+}
+
+async function writeSchedules(data: SchedulesFile): Promise<void> {
+  await scheduleMutex.runExclusive(async () => {
+    writeSchedulesFile(SCHEDULES_PATH, data);
+  });
+}
+
+function shortSha256(text: string): string {
+  return createHash("sha256").update(text, "utf-8").digest("hex").slice(0, 16);
+}
+
+function loadPersonaRaw(): string {
+  const inline = process.env.TELEGRAM_AGENT_PERSONALITY?.trim() ?? "";
+  const fileRel = process.env.TELEGRAM_AGENT_PERSONALITY_FILE?.trim();
+  let fromFile = "";
+  if (fileRel) {
+    const abs = path.isAbsolute(fileRel)
+      ? fileRel
+      : path.join(WORKSPACE_ROOT, fileRel);
+    if (existsSync(abs)) fromFile = readFileSync(abs, "utf-8");
+  }
+  if (inline && fromFile) return `${inline}\n\n---\n\n${fromFile}`;
+  return inline || fromFile;
+}
+
+function resolveContext7Entry(): string {
+  const require = createRequire(import.meta.url);
+  const pkgJson = require.resolve("@upstash/context7-mcp/package.json");
+  return path.join(path.dirname(pkgJson), "dist", "index.js");
+}
+
+function buildOptionalMcpServers():
+  | Record<string, McpServerConfig>
+  | undefined {
+  const servers: Record<string, McpServerConfig> = {};
+
+  const key = process.env.CONTEXT7_API_KEY?.trim();
+  if (key) {
+    const script = resolveContext7Entry();
+    servers.context7 = {
+      type: "stdio",
+      command: process.execPath,
+      args: [script],
+      cwd: WORKSPACE_ROOT,
+      env: { CONTEXT7_API_KEY: key },
+    };
+  }
+
+  const kvUrlRaw =
+    process.env.MCP_KV_HTTP_URL?.trim() ||
+    process.env.MCP_KV_URL?.trim() ||
+    "";
+  const trimmedKv = kvUrlRaw.replace(/\/$/, "");
+  if (trimmedKv) {
+    const envType = process.env.MCP_KV_HTTP_TYPE?.trim().toLowerCase();
+    /** mcp-kv.ru: Streamable HTTP на том же URL; legacy SSE-транспорт SDK зависает на initialize/tools list. */
+    const forceLegacySse =
+      process.env.MCP_KV_LEGACY_SSE_TRANSPORT?.trim().toLowerCase() === "true";
+    const transport: "http" | "sse" =
+      /mcp-kv\.ru/i.test(trimmedKv) && !forceLegacySse
+        ? "http"
+        : envType === "sse"
+          ? "sse"
+          : envType === "http"
+            ? "http"
+            : /\/sse\//i.test(trimmedKv)
+              ? "sse"
+              : "http";
+    const kvBearer =
+      process.env.MCP_KV_HTTP_BEARER?.trim() ||
+      process.env.MCP_KV_BEARER?.trim() ||
+      process.env.MCP_KV_TOKEN?.trim();
+    const headers: Record<string, string> = {
+      ...(gTelegramCursorMcpKvHeaders ?? {}),
+    };
+    if (kvBearer) headers.Authorization = `Bearer ${kvBearer}`;
+    servers.mcp_kv = {
+      type: transport,
+      url: trimmedKv,
+      ...(Object.keys(headers).length ? { headers } : {}),
+    };
+  }
+
+  return Object.keys(servers).length ? servers : undefined;
+}
+
+type AccessTier = "owner" | "bootstrap_open" | "outsider";
+
+function maskChatId(chatId: number | undefined): string {
+  if (chatId == null) return "неизвестно";
+  const s = String(chatId);
+  if (s.length <= 4) return "****";
+  return `${"*".repeat(Math.max(0, s.length - 4))}${s.slice(-4)}`;
+}
+
+/** null = TELEGRAM_ALLOWED_CHAT_IDS не задан (bootstrap). */
+function parseAllowlistIds(): Set<string> | null {
+  const raw = process.env.TELEGRAM_ALLOWED_CHAT_IDS?.trim();
+  if (!raw) return null;
+  const ids = raw
+    .split(/[,;\s]+/)
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .map(String);
+  if (ids.length === 0) return null;
+  return new Set(ids);
+}
+
+function accessTier(chatId: number | undefined): AccessTier {
+  if (chatId == null) return "outsider";
+  const ids = parseAllowlistIds();
+  if (!ids) return "bootstrap_open";
+  return ids.has(String(chatId)) ? "owner" : "outsider";
+}
+
+function tierLabelRu(tier: AccessTier): string {
+  switch (tier) {
+    case "owner":
+      return "владелец";
+    case "bootstrap_open":
+      return "начальная настройка (нет TELEGRAM_ALLOWED_CHAT_IDS)";
+    case "outsider":
+      return "доступ запрещён (чат не в списке)";
+    default:
+      return tier;
+  }
+}
+
+function allowModeLabelRu(allow: Set<string> | null): string {
+  if (!allow) return "начальная настройка — список чатов не задан";
+  return `ограничено списком (${allow.size} chat_id)`;
+}
+
+function whoamiReplyHtml(chatId: number | undefined): string {
+  const id = chatId ?? "?";
+  return (
+    `<b>Ваш идентификатор чата</b>\n` +
+    `<code>chat_id</code>: <code>${id}</code>\n\n` +
+    `Вставьте это значение в переменную <code>TELEGRAM_ALLOWED_CHAT_IDS</code>:\n` +
+    `• в <b>Cursor UI</b> → <b>Secrets</b> / <b>Environment</b> для репозитория или автоматизации,\n` +
+    `• или в локальном файле <code>.env</code>.\n\n` +
+    `Затем перезапустите процесс бота или задание Cursor Automations / Cloud.`
+  );
+}
+
+const MSG_OUTSIDER =
+  "Этот бот только для владельца: ваш чат не входит в список <code>TELEGRAM_ALLOWED_CHAT_IDS</code>.";
+
+const MSG_BOOTSTRAP_DANGEROUS =
+  "Пока не задан <code>TELEGRAM_ALLOWED_CHAT_IDS</code>, недоступны: запросы к агенту Cursor, расписания и действия, которые меняют очередь без режима предпросмотра.\n\n" +
+  "<b>Что сделать</b>\n" +
+  "1) Выполните /whoami или кнопку «Мой chat_id» — скопируйте число.\n" +
+  "2) Вставьте его в <code>TELEGRAM_ALLOWED_CHAT_IDS</code> в <b>Cursor UI → Secrets / Environment</b> или в локальный <code>.env</code>.\n" +
+  "3) Перезапустите бота или автоматизацию.\n\n" +
+  "<code>TELEGRAM_BOT_TOKEN</code> нужен, чтобы бот вообще запускался и отвечал на <code>/whoami</code>. <code>CURSOR_API_KEY</code> — для сообщений агенту; задаётся там же или в <code>.env</code> локально.";
+
+async function guardOutsider(ctx: Context): Promise<boolean> {
+  if (accessTier(ctx.chat?.id) !== "outsider") return true;
+  console.error(
+    `[telegram-bot] access denied (outsider) chat_id=${maskChatId(ctx.chat?.id)}`,
+  );
+  await ctx.reply(MSG_OUTSIDER, { parse_mode: "HTML" });
+  return false;
+}
+
+/** Агент, расписания, reset/new_agent, сессии и т.п. — только владелец (не bootstrap). /queue_next отдельно: peek через guardPeekQueue. */
+async function guardDangerous(ctx: Context): Promise<boolean> {
+  const tier = accessTier(ctx.chat?.id);
+  if (tier === "outsider") {
+    console.error(
+      `[telegram-bot] dangerous denied (outsider) chat_id=${maskChatId(ctx.chat?.id)}`,
+    );
+    await ctx.reply(MSG_OUTSIDER, { parse_mode: "HTML" });
+    return false;
+  }
+  if (tier === "bootstrap_open") {
+    await ctx.reply(MSG_BOOTSTRAP_DANGEROUS, { parse_mode: "HTML" });
+    return false;
+  }
+  return true;
+}
+
+/** Диагностика очереди в режиме peek — доступна до настройки allowlist (кроме посторонних chat_id). */
+async function guardPeekQueue(ctx: Context): Promise<boolean> {
+  return guardOutsider(ctx);
+}
+
+function buildAutonomyPrefix(): string {
+  const autonomyRu = [
+    "В начале работы составь краткий внутренний список подзадач (todo), обновляй его по ходу и веди задачу до конца без лишних уточнений.",
+    "Если при выполнении что-то ломается — падают тесты или сборка, код недоделан или ошибочен, публикация/деплой/CI не проходит — сам диагностируй причину, правь код, конфигурацию и при необходимости документацию в рамках этого проекта (workspace), повторяй проверки (npm run build, тесты и другие релевантные команды из репозитория) и доводи всё до стабильно рабочего состояния.",
+    "К человеку обращайся только при реальном блокере: нужны секреты или учётные данные, нет внешнего доступа или прав, требуется необратимое действие без явного подтверждения, исчерпаны платные лимиты или квоты, либо без этого продолжать небезопасно или невозможно.",
+  ].join("\n");
+  const utcIso = new Date().toISOString();
+  let timeLine = `<time>${utcIso}</time> (UTC)`;
+  const tz = process.env.BOT_TIMEZONE?.trim() || DEFAULT_BOT_TIMEZONE;
+  try {
+    const local = new Intl.DateTimeFormat("en-GB", {
+      timeZone: tz,
+      dateStyle: "medium",
+      timeStyle: "long",
+    }).format(new Date());
+    timeLine += `\nLocal (${tz}): ${local}`;
+  } catch {
+    timeLine += `\n(некорректная часовая зона BOT_TIMEZONE — используется запасной вариант)`;
+  }
+  return `${autonomyRu}\n\n${timeLine}\n\n---\n\n`;
+}
+
+function appendScheduledPublishHint(): string {
+  return [
+    "## Запуск по расписанию (Telegram)",
+    "Если задача про контент/публикацию: по умолчанию безопасный dry-run (`CONTENT_PUBLISH_MODE` / флаг `--publish` в content-factory). Реальную публикацию в прод включайте только при явной настройке окружения или прямой просьбе пользователя.",
+    "",
+  ].join("\n");
+}
+
+function appendMayaiStructureReferenceClarity(userMessage: string): string {
+  if (!/mayai|майай|mayai\.ru/iu.test(userMessage)) return "";
+  return [
+    "## Уточнение: «референс mayai»",
+    "- Ссылка на статью-образец — только **структура, стиль, ритм, блоки и ориентир длины**; **не** источник фактов и **не** источник картинок для тела статьи; текст не копировать.",
+    "- **Обложка и баннер** — отдельный референс изображения **с лицом пользователя**; лицо и идентичность **не менять** (identity_lock=true); одежда, фон, композиция, промпты Nano — по blueprint RU SEO-GEO СТАТЬИ ДЛЯ БЛОГА 2026.",
+    "",
+  ].join("\n");
+}
+
+function appendWordpressArticlesHint(userMessage: string): string {
+  const triggers =
+    /вордпресс\s*стат|wordpress\s*articles|wordprais\.ru|wordprais|вордпрейс/u;
+  if (!triggers.test(userMessage)) return "";
+  return [
+    "## Автоматизация «Вордпресс статьи» (целевой сайт wordprais.ru)",
+    "- Полный пошаговый регламент без пропусков: **`prompts/wordpress-articles/MASTER_PROMPT.md`**; короткая шпаргалка (меньше токенов): **`prompts/wordpress-articles/MASTER_PROMPT_SHORT.md`**.",
+    "- Разметка HTML (лид, врезки, таблица, баннер 21:9 в теле, FAQ, ресурсы): **`prompts/wordpress-articles/HTML_STRUCTURE_WORDPRAIS.md`**.",
+    "- Конфиг цели и Allowlist ссылок: **`config/wordpress-articles.json`**; навык агента: **`wordpress-articles`**.",
+    "- Изображения через MCP **mcp-kv.ru**: **`nano_banana_pro`** — обложка **16:9**, баннер **21:9**; затем **`wordpress_upload_media`** и постоянный URL на домене сайта (см. **`npm run wp:nano-images-republish`**, **`MCP_REQUEST_TIMEOUT_MS`**).",
+    "",
+  ].join("\n");
+}
+
+function appendContentFactoryHint(userMessage: string): string {
+  const triggers =
+    /ниш|ключ|стать|опублик|референс|seo|гео|geo|контент.?фабрик|indexnow|метла|wordpress|WP\b|блог/u;
+  if (!triggers.test(userMessage)) return "";
+  return [
+    "## Content Factory (SEO / GEO / нейропоиск)",
+    "Если это задача на статью, нишу, ключи, стиль референса, публикацию или антидубль — используй навык **director-content-factory** и стадии из `config/agent-orchestration.json`.",
+    "Старт каркаса (по умолчанию dry-run): `npm run content:run -- --niche \"...\" --keywords \"...\"`. Публикация только с `--publish` или `CONTENT_PUBLISH_MODE=publish`. IndexNow: публичный verification key на домене — см. README (`INDEXNOW_KEY`, не API-token).",
+    "Артефакты: `artifacts/content-runs/<runId>/` (`handoff.json`, `article.md`, `seo.json`, `duplicate-report.json`). WordPress: предпочти существующий `npm run workflow:cloud` / MCP из репозитория.",
+    "Обязательные стадии: humanizer (`russian-humanizer-seo`), duplicate-guardian; supervisor QA до 3 итераций.",
+    "",
+  ].join("\n");
+}
+
+function extractAssistantTextFromStreamMessage(ev: SDKMessage): string {
+  if (ev.type !== "assistant") return "";
+  const parts: string[] = [];
+  for (const block of ev.message.content) {
+    if (block.type === "text" && block.text) parts.push(block.text);
+  }
+  return parts.join("");
+}
+
+function validateTelegramStartup(): void {
+  const missing: string[] = [];
+  if (!process.env.TELEGRAM_BOT_TOKEN?.trim())
+    missing.push("TELEGRAM_BOT_TOKEN");
+  if (missing.length === 0) return;
+  console.error(
+    `Не удалось запустить Telegram-бота: не заданы переменные окружения: ${missing.join(", ")}.`,
+  );
+  console.error(
+    "В Cursor Cloud задайте их в Secrets / Environment для автоматизации; локально дополните файл .env в корне репозитория.",
+  );
+  process.exit(1);
+}
+
+function effectiveCursorModel(): string {
+  return process.env.CURSOR_MODEL?.trim() || DEFAULT_CURSOR_MODEL;
+}
+
+async function getOrCreateAgent(
+  chatId: string,
+  apiKey: string,
+  modelId: string,
+  mcpServers: Record<string, McpServerConfig> | undefined,
+  onAgentReady?: (kind: "resume" | "create") => void | Promise<void>,
+): Promise<SDKAgent> {
+  const base: Parameters<typeof Agent.create>[0] = {
+    apiKey,
+    model: { id: modelId },
+    local: { cwd: WORKSPACE_ROOT },
+    name: `telegram-chat-${chatId}`,
+    ...(mcpServers ? { mcpServers } : {}),
+  };
+
+  const existing = await sessionMutex.runExclusive(
+    async () => readSessions()[chatId]?.agentId,
+  );
+  if (existing) {
+    try {
+      const resumed = await Agent.resume(existing, base);
+      await onAgentReady?.("resume");
+      return resumed;
+    } catch (e) {
+      console.warn(
+        `[telegram-bot] Agent.resume failed for chat ${chatId}, creating new:`,
+        e,
+      );
+    }
+  }
+
+  const agent = await Agent.create(base);
+  await onAgentReady?.("create");
+  await sessionMutex.runExclusive(async () => {
+    const s = readSessions();
+    s[chatId] = { ...s[chatId], agentId: agent.agentId };
+    writeSessions(s);
+  });
+  return agent;
+}
+
+function sanitizeErrorForUser(e: unknown): string {
+  const rawName = e instanceof Error ? e.name : "Error";
+  const name =
+    rawName === "Error" ? "Ошибка" : escapeHtml(rawName);
+  let msg = e instanceof Error ? e.message : String(e);
+  msg = msg
+    .replace(/crsr_[a-zA-Z0-9]+/gi, "[скрыто]")
+    .replace(/\d{6,}:[A-Za-z0-9_-]{10,}/g, "[скрыто]");
+  if (msg.length > 280) msg = `${msg.slice(0, 280)}…`;
+  return `${name}: ${escapeHtml(msg)}`;
+}
+
+interface AgentTurnProgress {
+  onAgentReady: (kind: "resume" | "create") => Promise<void>;
+  onBeforeSend: () => Promise<void>;
+  onPulseWorking: () => Promise<void>;
+  onFirstStreamChunk: () => Promise<void>;
+  onFinalizing: () => Promise<void>;
+}
+
+async function runAgentTurn(
+  chatId: string,
+  userPlainText: string,
+  apiKey: string,
+  modelId: string,
+  mcpServers: Record<string, McpServerConfig> | undefined,
+  progress: AgentTurnProgress,
+  options?: { scheduled?: boolean; agentMode?: AgentMode },
+): Promise<string> {
+  const personaRaw = loadPersonaRaw();
+  const currentPersonaHash = shortSha256(personaRaw);
+  const hasPersonaBody = personaRaw.trim().length > 0;
+
+  const rec = await sessionMutex.runExclusive(
+    async () => readSessions()[chatId],
+  );
+  if (
+    rec?.personaHash !== undefined &&
+    rec.personaHash !== currentPersonaHash
+  ) {
+    console.warn(
+      `[telegram-bot] Persona content changed (stored hash ${rec.personaHash} vs current ${currentPersonaHash}). User should run /reset for a clean agent if behavior is wrong.`,
+    );
+  }
+
+  const injectPersona =
+    hasPersonaBody && (rec?.personaHash ?? "") !== currentPersonaHash;
+  const agentMode: AgentMode = options?.agentMode ?? "agent";
+  const schedHint = options?.scheduled ? appendScheduledPublishHint() : "";
+  let prefixBody: string;
+  let tailHints: string;
+  if (agentMode === "ask" || agentMode === "plan") {
+    prefixBody = buildRestrictedModePrefix(agentMode);
+    tailHints = "";
+  } else {
+    prefixBody = `${buildAutonomyPrefix()}${schedHint}`;
+    tailHints = `${appendContentFactoryHint(userPlainText)}${appendWordpressArticlesHint(userPlainText)}${appendMayaiStructureReferenceClarity(userPlainText)}`;
+  }
+  const personaBlock = injectPersona
+    ? `# Persona (session sync)\n${personaRaw}\n\n---\n\n`
+    : "";
+  const payload = `${prefixBody}${tailHints}${personaBlock}${userPlainText}`;
+
+  const agent = await getOrCreateAgent(
+    chatId,
+    apiKey,
+    modelId,
+    mcpServers,
+    async (kind) => {
+      await progress.onAgentReady(kind);
+    },
+  );
+
+  let streamed = "";
+  let pulseGeneration = 0;
+  try {
+    await progress.onBeforeSend();
+
+    const run = await agent.send(payload);
+
+    let stopped = false;
+    const pulseLoop = (async () => {
+      const gen = ++pulseGeneration;
+      while (!stopped) {
+        await new Promise<void>((r) => setTimeout(r, WORKING_PULSE_MS));
+        if (stopped || gen !== pulseGeneration) break;
+        await progress.onPulseWorking();
+      }
+    })();
+
+    let firstChunkNotified = false;
+    try {
+      for await (const ev of run.stream()) {
+        const chunk = extractAssistantTextFromStreamMessage(ev);
+        if (chunk && !firstChunkNotified) {
+          firstChunkNotified = true;
+          await progress.onFirstStreamChunk();
+        }
+        streamed += chunk;
+      }
+    } catch (streamErr) {
+      stopped = true;
+      await pulseLoop.catch(() => {});
+      throw streamErr;
+    }
+
+    await progress.onFinalizing();
+
+    let waited;
+    try {
+      waited = await run.wait();
+    } finally {
+      stopped = true;
+      await pulseLoop.catch(() => {});
+    }
+    let textOut = streamed.trim();
+    if (!textOut) textOut = (waited.result ?? "").trim();
+    if (waited.status === "finished") {
+      await sessionMutex.runExclusive(async () => {
+        const s = readSessions();
+        s[chatId] = {
+          agentId: agent.agentId,
+          personaHash: currentPersonaHash,
+        };
+        writeSessions(s);
+      });
+    } else if (waited.status === "error") {
+      textOut = textOut || `Статус агента: ошибка\n${waited.result ?? ""}`;
+    } else {
+      textOut =
+        textOut ||
+        `Статус агента: ${waited.status}\n${waited.result ?? ""}`.trim();
+    }
+    return textOut;
+  } finally {
+    await agent[Symbol.asyncDispose]();
+  }
+}
+
+async function replyHtmlChunksApi(api: Api, chatId: number, plain: string): Promise<void> {
+  const body = escapeHtml(plain);
+  const wrapped = `<pre>${body}</pre>`;
+  for (const part of chunkForTelegram(wrapped)) {
+    try {
+      await api.sendMessage(chatId, part, { parse_mode: "HTML" });
+    } catch {
+      /* noop */
+    }
+  }
+}
+
+function startTypingLoopApi(api: Api, chatId: number): () => void {
+  const id = setInterval(() => {
+    void api.sendChatAction(chatId, "typing").catch(() => {});
+  }, 4000);
+  void api.sendChatAction(chatId, "typing").catch(() => {});
+  return () => clearInterval(id);
+}
+
+const MSG_NO_CURSOR_API_KEY =
+  "<b>Не задан</b> <code>CURSOR_API_KEY</code>. Добавьте ключ в Cursor → Secrets / Environment или в локальный <code>.env</code> и перезапустите бота.\n\nКоманды бота и предпросмотр очереди (<code>/whoami</code>, <code>/queue_next</code> и т.д.) работают только с <code>TELEGRAM_BOT_TOKEN</code>. Чтобы отправить <i>обычный текст</i> в Cursor Agent, нужен и <code>CURSOR_API_KEY</code>.";
+
+async function executeAgentJob(params: {
+  chatIdStr: string;
+  chatIdNum: number;
+  userPlainText: string;
+  api: Api;
+  apiKey: string;
+  modelId: string;
+  mcpServers: Record<string, McpServerConfig> | undefined;
+  scheduled?: boolean;
+  agentMode?: AgentMode;
+}): Promise<void> {
+  const {
+    chatIdStr,
+    chatIdNum,
+    userPlainText,
+    api,
+    apiKey,
+    modelId,
+    mcpServers,
+    scheduled,
+    agentMode,
+  } = params;
+
+  if (!apiKey.trim()) {
+    if (scheduled) {
+      console.error(
+        "[telegram-bot] scheduled job skipped: CURSOR_API_KEY missing",
+      );
+      return;
+    }
+    try {
+      await api.sendMessage(chatIdNum, MSG_NO_CURSOR_API_KEY, {
+        parse_mode: "HTML",
+      });
+    } catch {
+      /* noop */
+    }
+    return;
+  }
+
+  const card = new TaskStatusCard(api, chatIdNum);
+  const stopTyping = startTypingLoopApi(api, chatIdNum);
+
+  try {
+    if (scheduled) {
+      await card.open("Плановый запуск: принял в работу.", 5);
+    } else {
+      await card.open("Принял в работу. Запускаю сценарий…", 5);
+    }
+
+    const answer = await runAgentTurn(
+      chatIdStr,
+      userPlainText,
+      apiKey,
+      modelId,
+      mcpServers,
+      {
+        onAgentReady: async (kind) => {
+          card.resetWorkingFloor();
+          if (kind === "resume") {
+            await card.update("Продолжаю вашу прошлую сессию.", 15);
+          } else {
+            await card.update("Создаю новую сессию ассистента.", 15);
+          }
+        },
+        onBeforeSend: async () => {
+          await card.update("Передал запрос ассистенту.", 30);
+        },
+        onPulseWorking: async () => {
+          await card.pulseWorking("Ассистент обрабатывает задачу…");
+        },
+        onFirstStreamChunk: async () => {
+          await card.update("Получаю ответ…", 85);
+        },
+        onFinalizing: async () => {
+          await card.update("Завершаю…", 95);
+        },
+      },
+      { scheduled, agentMode: agentMode ?? "agent" },
+    );
+
+    await card.update("Готово.", 100);
+    await card.remove();
+    await replyHtmlChunksApi(api, chatIdNum, answer);
+  } catch (e) {
+    await card.showError(sanitizeErrorForUser(e));
+  } finally {
+    stopTyping();
+  }
+}
+
+function ownerReplyKeyboard(): Keyboard {
+  return new Keyboard()
+    .text(REPLY_KB.MENU)
+    .text(REPLY_KB.STATUS)
+    .row()
+    .text(REPLY_KB.WHOAMI)
+    .text(REPLY_KB.SESSIONS)
+    .row()
+    .text(REPLY_KB.QUEUE_STATUS)
+    .text(REPLY_KB.QUEUE_NEXT)
+    .row()
+    .text(REPLY_KB.PUBLISH_ARTICLE)
+    .text(REPLY_KB.STOP_AUTOMATION)
+    .row()
+    .text(REPLY_KB.STOP_CURRENT_RUN)
+    .row()
+    .text(REPLY_KB.SCHEDULE_LIST)
+    .text(REPLY_KB.AUTOMATIONS)
+    .row()
+    .resized()
+    .persistent();
+}
+
+function menuRootInline(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("Режим Ask", "tgmode:ask")
+    .text("Режим Plan", "tgmode:plan")
+    .text("Режим Agent", "tgmode:agent")
+    .row()
+    .text("Агенты в Cursor", "tgmenu:agents")
+    .text("Режимы Ask/Plan", "tgmenu:modes")
+    .row()
+    .text("Автоматизации", "tgmenu:auto")
+    .text("Очередь Wordstat", "tgmenu:queue")
+    .row()
+    .text("Расписания", "tgmenu:sched")
+    .row()
+    .text("Статус бота", "tgmenu:status")
+    .text("Мой chat_id", "tgmenu:whoami");
+}
+
+function readWordstatQueueDiagnostics(chatId: number): string {
+  try {
+    const site = getSiteForChat(WORKSPACE_ROOT, chatId);
+    const registry = readTelegramWordstatSites(WORKSPACE_ROOT);
+    const row = registry.sites[site];
+    if (!row)
+      return `Неизвестный профиль сайта: <code>${escapeHtml(site)}</code>`;
+    const configPath = path.join(WORKSPACE_ROOT, row.wordstatAutomationConfig);
+    if (!existsSync(configPath))
+      return `Конфиг не найден: <code>${escapeHtml(row.wordstatAutomationConfig)}</code>`;
+    const conf = JSON.parse(readFileSync(configPath, "utf-8")) as {
+      keywordQueue?: unknown[];
+      seeds?: { queries?: unknown[] }[];
+    };
+    let q = 0;
+    if (Array.isArray(conf.keywordQueue)) q = conf.keywordQueue.length;
+    else if (Array.isArray(conf.seeds)) {
+      for (const s of conf.seeds)
+        q += Array.isArray(s?.queries) ? s.queries.length : 0;
+    }
+    let reserved = 0;
+    let processed = 0;
+    const statePath =
+      site === "wordprais"
+        ? path.join(WORKSPACE_ROOT, "artifacts", "simple-keyword-queue.json")
+        : path.join(
+            WORKSPACE_ROOT,
+            "artifacts",
+            `simple-keyword-queue.${site}.json`,
+          );
+    if (existsSync(statePath)) {
+      const st = JSON.parse(readFileSync(statePath, "utf-8")) as {
+        reservedPhrasesNorm?: unknown[];
+        processedPhrasesNorm?: unknown[];
+      };
+      reserved = Array.isArray(st.reservedPhrasesNorm)
+        ? st.reservedPhrasesNorm.length
+        : 0;
+      processed = Array.isArray(st.processedPhrasesNorm)
+        ? st.processedPhrasesNorm.length
+        : 0;
+    }
+    let lastMode = "—";
+    const lastPath =
+      site === "wordprais"
+        ? path.join(WORKSPACE_ROOT, "artifacts", "wordstat-queue-last.json")
+        : path.join(
+            WORKSPACE_ROOT,
+            "artifacts",
+            `wordstat-queue-last.${site}.json`,
+          );
+    if (existsSync(lastPath)) {
+      const last = JSON.parse(readFileSync(lastPath, "utf-8")) as {
+        mode?: string;
+      };
+      lastMode = last.mode ?? "—";
+    }
+    return (
+      `<b>Очередь Wordstat</b> (только просмотр)\n` +
+      `• профиль чата: <code>${escapeHtml(site)}</code> (${escapeHtml(row.label)})\n` +
+      `• конфиг: <code>${escapeHtml(row.wordstatAutomationConfig)}</code>\n` +
+      `• ключей в конфиге (оценка): ${q}\n` +
+      `• зарезервировано в состоянии: ${reserved}\n` +
+      `• обработано (processed): ${processed}\n` +
+      `• последний режим в артефакте: <code>${escapeHtml(lastMode)}</code>\n` +
+      `• переключение: /site_wordprais · /site_bytmaster34 · /site`
+    );
+  } catch {
+    return "Не удалось прочитать файлы очереди.";
+  }
+}
+
+function runWordstatQueuePeek(chatId: number): string {
+  const site = getSiteForChat(WORKSPACE_ROOT, chatId);
+  const childEnv = wordstatSpawnEnv(WORKSPACE_ROOT, site);
+  const script = path.join(
+    WORKSPACE_ROOT,
+    "scripts",
+    "wp-wordstat-queue-next.mjs",
+  );
+  try {
+    const r = spawnSync(process.execPath, [script, "--peek"], {
+      cwd: WORKSPACE_ROOT,
+      encoding: "utf-8",
+      env: childEnv,
+      timeout: 120_000,
+    });
+    if (r.status !== 0) {
+      return (
+        `Скрипт очереди завершился с кодом ${r.status}. Проверьте локально: node scripts/wp-wordstat-queue-next.mjs --peek`
+      );
+    }
+    const raw = (r.stdout ?? "").trim();
+    const j = JSON.parse(raw) as {
+      mode?: string;
+      phrase?: string;
+      keywordId?: string;
+      reason?: string;
+      peek?: boolean;
+      taskRu?: string;
+    };
+    const taskPreview =
+      j.taskRu?.trim().slice(0, 600) ?? "";
+    const lines = [
+      `<b>Предпросмотр следующей темы</b> (очередь не меняется)`,
+      `• профиль: <code>${escapeHtml(site)}</code>`,
+      `• режим: <code>${escapeHtml(j.mode ?? "?")}</code>`,
+      `• запись состояния отключена: <code>${j.peek === true ? "да" : "нет"}</code>`,
+    ];
+    if (j.keywordId)
+      lines.push(`• идентификатор ключа: <code>${escapeHtml(j.keywordId)}</code>`);
+    if (j.phrase)
+      lines.push(`• фраза: ${escapeHtml(j.phrase.slice(0, 240))}`);
+    if (j.reason)
+      lines.push(`• причина: <code>${escapeHtml(j.reason)}</code>`);
+    if (taskPreview)
+      lines.push(
+        "",
+        "<b>Текст задания</b> (усечено):",
+        `<pre>${escapeHtml(taskPreview)}${taskPreview.length >= 600 ? "…" : ""}</pre>`,
+      );
+    return lines.join("\n");
+  } catch {
+    return "Не удалось выполнить предпросмотр очереди.";
+  }
+}
+
+function listAutomationTemplatesHtml(): string {
+  const dir = path.join(ROOT, ".cursor", "automations");
+  if (!existsSync(dir)) return "Папка .cursor/automations не найдена.";
+  const names = readdirSync(dir).filter((f) => f.endsWith(".md")).sort();
+  if (!names.length) return "Файлов .md нет.";
+  const lines = names.map((n) => `• <code>${escapeHtml(n)}</code>`);
+  return (
+    `<b>Шаблоны автоматизаций Cursor</b>\n` +
+    `Откройте <a href="https://cursor.com/automations">раздел Automations</a> и перенесите текст из файлов:\n` +
+    `${lines.join("\n")}\n\n` +
+    `Оглавление: <code>.cursor/automations/README.md</code>`
+  );
+}
+
+async function buildStatusHtml(ctx: Context): Promise<string> {
+  const tier = accessTier(ctx.chat?.id);
+  const sessions = readSessions();
+  const sessionKeys = Object.keys(sessions);
+  const sched = await readSchedules();
+  const schedKeys = Object.keys(sched);
+  const uptimeSec = Math.floor((Date.now() - botProcessStartedAt) / 1000);
+  const allow = parseAllowlistIds();
+  const allowMode = allowModeLabelRu(allow);
+  const cid = ctx.chat?.id != null ? String(ctx.chat.id) : "";
+  const mode = cid ? await getChatMode(cid) : "agent";
+  const mine = cid ? sessions[cid] : undefined;
+  const mineAgent = mine?.agentId
+    ? `${mine.agentId.slice(0, 6)}…${mine.agentId.slice(-4)}`
+    : "нет";
+  const persona = mine?.personaHash
+    ? `${mine.personaHash.slice(0, 8)}…`
+    : "—";
+  let siteLine = "—";
+  if (cid) {
+    try {
+      const sk = getSiteForChat(WORKSPACE_ROOT, cid);
+      const reg = readTelegramWordstatSites(WORKSPACE_ROOT);
+      const lbl = reg.sites[sk]?.label ?? sk;
+      siteLine = `${lbl} (<code>${escapeHtml(sk)}</code>)`;
+    } catch {
+      siteLine = "ошибка чтения config/telegram-wordstat-sites.json";
+    }
+  }
+  return [
+    "<b>Статус бота</b>",
+    `• каталог workspace (<code>WORKSPACE_ROOT</code>): <code>${escapeHtml(WORKSPACE_ROOT)}</code>`,
+    `• профиль сайта (очередь / WP для этого чата): ${siteLine}`,
+    `• модель (<code>CURSOR_MODEL</code>): <code>${escapeHtml(effectiveCursorModel())}</code>`,
+    `• режим агента для этого чата: <b>${escapeHtml(agentModeLabelRu(mode))}</b> (/ask · /plan · /agent)`,
+    `• доступ: <code>${escapeHtml(allowMode)}</code>; ваш уровень: <code>${escapeHtml(tierLabelRu(tier))}</code>`,
+    `• записей сессий в файле: ${sessionKeys.length}; расписаний: ${schedKeys.length}`,
+    `• ваш агент (маска <code>agentId</code>): <code>${escapeHtml(mineAgent)}</code>; хеш персоны: <code>${escapeHtml(persona)}</code>`,
+    `• время с запуска процесса: ${uptimeSec} с`,
+  ].join("\n");
+}
+
+function resolveWordstatQueueTask(childEnv?: NodeJS.ProcessEnv): string {
+  const script = path.join(WORKSPACE_ROOT, "scripts", "wp-wordstat-queue-next.mjs");
+  try {
+    const r = spawnSync(process.execPath, [script], {
+      cwd: WORKSPACE_ROOT,
+      encoding: "utf-8",
+      env: childEnv ?? process.env,
+      timeout: 120_000,
+    });
+    if (r.status !== 0) {
+      console.error("[telegram-bot] wordstat queue exit", r.status, r.stderr?.slice(0, 500));
+      return (
+        `Не удалось получить тему из очереди Wordstat (скрипт завершился с кодом ${r.status}). Выполните в каталоге проекта: npm run wp:wordstat-queue-next и передайте поле taskRu ассистенту.\n\n` +
+        `Нужна автоматизация «Вордпресс статьи» для wordprais.ru по MASTER_PROMPT.`
+      );
+    }
+    const raw = (r.stdout ?? "").trim();
+    const j = JSON.parse(raw) as { taskRu?: string };
+    if (!j.taskRu?.trim()) throw new Error("empty taskRu");
+    return j.taskRu.trim();
+  } catch (e) {
+    console.error("[telegram-bot] resolveWordstatQueueTask", e);
+    return (
+      `Ошибка очереди Wordstat. Запустите: npm run wp:wordstat-queue-next и передайте значение taskRu ассистенту.\n\n` +
+      `Дальше — полный цикл «Вордпресс статьи» (nano-изображения, публикация WordPress).`
+    );
+  }
+}
+
+function scheduleSummaryLine(chatIdStr: string, s: ChatScheduleRecord): string {
+  if (!s.enabled) return "Расписание выключено.";
+  const when = new Date(s.nextRunAt).toLocaleString("ru-RU", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+  const schedSite = s.wordstatSite ?? getSiteForChat(WORKSPACE_ROOT, chatIdStr);
+  let registry: ReturnType<typeof readTelegramWordstatSites>;
+  try {
+    registry = readTelegramWordstatSites(WORKSPACE_ROOT);
+  } catch {
+    registry = { defaultSite: "wordprais", sites: {} };
+  }
+  const cfg =
+    registry.sites[schedSite]?.wordstatAutomationConfig ??
+    "config/wordprais-wordstat-automation.json";
+  const label = registry.sites[schedSite]?.label ?? schedSite;
+  const queueHint = s.wordstatQueue
+    ? `Режим очереди Wordstat (${label}): конфиг ${cfg}. Профиль расписания: «${schedSite}» (смена: /site_*).`
+    : "";
+  const tmpl = s.lastTaskText?.trim()
+    ? s.wordstatQueue && s.lastTaskText.trim() === WORDSTAT_QUEUE_SENTINEL
+      ? "Шаблон: автоматическая очередь ключей Wordstat."
+      : "Шаблон задачи сохранён."
+    : "Шаблон задачи ещё не задан — отправьте текст с ключами или нишей.";
+  const q = queueHint ? `\n${queueHint}` : "";
+  return `Интервал: каждые ${formatIntervalRu(s.intervalMs)}. Следующий запуск: ${when}. ${tmpl}${q}`;
+}
+
+async function main(): Promise<void> {
+  botProcessStartedAt = Date.now();
+  validateTelegramStartup();
+  const token = process.env.TELEGRAM_BOT_TOKEN!.trim();
+  const apiKey = process.env.CURSOR_API_KEY?.trim() ?? "";
+  const modelId = effectiveCursorModel();
+  const mcpServers = buildOptionalMcpServers();
+
+  const bot = new Bot(token);
+
+  bot.catch((err) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[telegram-bot]", msg);
+  });
+
+  const html = { parse_mode: "HTML" as const };
+
+  bot.command("whoami", async (ctx) => {
+    if (!(await guardOutsider(ctx))) return;
+    await ctx.reply(whoamiReplyHtml(ctx.chat?.id), html);
+  });
+
+  bot.command("start", async (ctx) => {
+    if (!(await guardOutsider(ctx))) return;
+    const tier = accessTier(ctx.chat?.id);
+    const tail =
+      tier === "bootstrap_open"
+        ? "\n\n⚠ Сейчас режим <b>начальной настройки</b>: задайте <code>TELEGRAM_ALLOWED_CHAT_IDS</code> (команда /whoami или кнопка «Мой chat_id»). До этого агент Cursor и расписания недоступны."
+        : "";
+    await ctx.reply(
+      `<b>Добро пожаловать.</b> Обычное сообщение <i>без слэша</i> передаётся в локальный Cursor Agent (SDK). Режимы: /ask · /plan · /agent.${tail}\n\n` +
+        `Разделы: /menu · Справка: /help · Состояние: /status`,
+      { ...html, reply_markup: ownerReplyKeyboard() },
+    );
+  });
+
+  bot.command("menu", async (ctx) => {
+    if (!(await guardOutsider(ctx))) return;
+    await ctx.reply("Выберите раздел меню:", {
+      ...html,
+      reply_markup: menuRootInline(),
+    });
+  });
+
+  bot.command("help", async (ctx) => {
+    if (!(await guardOutsider(ctx))) return;
+    await ctx.reply(
+      `<b>Справка</b>\n` +
+        `Сообщение <i>без</i> команды <code>/…</code> уходит агенту в каталог <code>WORKSPACE_ROOT</code> (после настройки <code>TELEGRAM_ALLOWED_CHAT_IDS</code>).\n\n` +
+        `<b>Режимы агента</b>\n` +
+        `• /ask или /mode_ask — Ask: только ответы/диагностика, без правок файлов и без команд\n` +
+        `• /plan или /mode_plan — Plan: только план, без выполнения\n` +
+        `• /agent или /mode_agent — обычная работа\n\n` +
+        `<b>Публикация «Вордпресс статьи»</b>\n` +
+        `Кнопка «Опубликовать статью», фразы <code>опубликуй статью</code> / <code>опубликовать статью</code> или /publish_article — только предупреждение.\n` +
+        `Подтверждение: <code>/publish_article_confirm</code> (резерв ключа <code>npm run wp:wordstat-queue-next</code>, затем агент + сценарии как в автоматизации).\n\n` +
+        `<b>Остановка автоматизации</b>\n` +
+        `Кнопка «Остановить автоматизацию», фраза <code>остановить автоматизацию</code> или /stop_automation — выключает локальные расписания бота; облако Cursor — только вручную в UI (бот пришлёт ссылку).\n\n` +
+        `<b>Остановка текущего запуска</b>\n` +
+        `Кнопка «Остановить текущий запуск», фраза <code>остановить текущий запуск</code> или /stop_run — снимает флаг «занято» в боте (поток Cursor SDK может ещё завершиться сам).\n\n` +
+        `<b>Основные команды</b>\n` +
+        `• /menu — меню с кнопками · /status — статус · /whoami — ваш chat_id\n` +
+        `• /sessions или /agents — сведения о сессии · /new_agent · /reset\n` +
+        `• /automations — шаблоны автоматизаций Cursor\n` +
+        `• /queue_status — сводка очереди · /queue_next — предпросмотр темы без изменения файлов\n` +
+        `• /site — активный профиль сайта · /site_wordprais · /site_bytmaster34\n` +
+        `• /schedule_list · /schedule · /schedule_every · /schedule_queue_every · /schedule_stop\n\n` +
+        `<b>Безопасность</b>\n` +
+        `Если <code>TELEGRAM_ALLOWED_CHAT_IDS</code> пуст, агент и расписания отключены для всех; доступны /whoami, меню и диагностика очереди.`,
+      html,
+    );
+  });
+
+  bot.command("status", async (ctx) => {
+    if (!(await guardOutsider(ctx))) return;
+    await ctx.reply(await buildStatusHtml(ctx), html);
+  });
+
+  bot.command("automations", async (ctx) => {
+    if (!(await guardOutsider(ctx))) return;
+    await ctx.reply(listAutomationTemplatesHtml(), html);
+  });
+
+  bot.command("queue_status", async (ctx) => {
+    if (!(await guardPeekQueue(ctx))) return;
+    const cid = ctx.chat?.id;
+    if (cid == null) return;
+    await ctx.reply(readWordstatQueueDiagnostics(cid), html);
+  });
+
+  bot.command("queue_next", async (ctx) => {
+    if (!(await guardPeekQueue(ctx))) return;
+    const cid = ctx.chat?.id;
+    if (cid == null) return;
+    await ctx.reply(runWordstatQueuePeek(cid), html);
+  });
+
+  bot.command("site", async (ctx) => {
+    if (!(await guardPeekQueue(ctx))) return;
+    const cid = ctx.chat?.id;
+    if (cid == null) return;
+    let registry: ReturnType<typeof readTelegramWordstatSites>;
+    try {
+      registry = readTelegramWordstatSites(WORKSPACE_ROOT);
+    } catch {
+      await ctx.reply(
+        "Не удалось прочитать <code>config/telegram-wordstat-sites.json</code>.",
+        html,
+      );
+      return;
+    }
+    const cur = getSiteForChat(WORKSPACE_ROOT, cid);
+    const rows = Object.entries(registry.sites)
+      .map(
+        ([key, row]) =>
+          `• <code>${escapeHtml(key)}</code> — ${escapeHtml(row.label)}`,
+      )
+      .join("\n");
+    await ctx.reply(
+      `<b>Профиль сайта для этого чата</b>\nАктивный ключ: <code>${escapeHtml(cur)}</code> — очередь Wordstat, предпросмотр и подтверждённая публикация идут в этот профиль.\n\nЗарегистрировано:\n${rows}\n\nПереключение (доступно владельцу после allowlist): /site_wordprais · /site_bytmaster34`,
+      html,
+    );
+  });
+
+  bot.command("site_wordprais", async (ctx) => {
+    if (!(await guardDangerous(ctx))) return;
+    const cid = ctx.chat?.id;
+    if (cid == null) return;
+    const k = setSiteForChat(WORKSPACE_ROOT, cid, "wordprais");
+    await ctx.reply(
+      `Профиль чата зафиксирован: <code>${escapeHtml(k)}</code>. Новые резервы очереди и публикации используют конфиг и состояние wordprais.`,
+      html,
+    );
+  });
+
+  bot.command("site_bytmaster34", async (ctx) => {
+    if (!(await guardDangerous(ctx))) return;
+    const cid = ctx.chat?.id;
+    if (cid == null) return;
+    const k = setSiteForChat(WORKSPACE_ROOT, cid, "bytmaster34");
+    await ctx.reply(
+      `Профиль чата зафиксирован: <code>${escapeHtml(k)}</code>. Очередь и пайплайн изолированы от wordprais (отдельные файлы состояния и при необходимости переменные WP с суффиксом).`,
+      html,
+    );
+  });
+
+  bot.command(["ask", "mode_ask"], async (ctx) => {
+    if (!(await guardOutsider(ctx))) return;
+    await setChatMode(String(ctx.chat?.id ?? ""), "ask");
+    await ctx.reply(
+      "<b>Режим Ask</b>\nОбычный текст без <code>/</code> передаётся в Cursor Agent как <b>вопрос или диагностика</b>: без изменения файлов, без терминальных команд, публикаций, commit/push.\n\nВернитесь в рабочий режим: <code>/agent</code>",
+      html,
+    );
+  });
+
+  bot.command(["plan", "mode_plan"], async (ctx) => {
+    if (!(await guardOutsider(ctx))) return;
+    await setChatMode(String(ctx.chat?.id ?? ""), "plan");
+    await ctx.reply(
+      "<b>Режим Plan</b>\nОбычный текст — только <b>план шагов</b>, без выполнения: без правок файлов, команд, публикаций, commit/push.\n\nРабочий режим: <code>/agent</code>",
+      html,
+    );
+  });
+
+  bot.command(["agent", "mode_agent"], async (ctx) => {
+    if (!(await guardOutsider(ctx))) return;
+    await setChatMode(String(ctx.chat?.id ?? ""), "agent");
+    await ctx.reply(
+      "<b>Режим Agent</b>\nОбычный текст снова обрабатывается в полном автономном режиме (как раньше).",
+      html,
+    );
+  });
+
+  bot.command("publish_article", async (ctx) => {
+    await replyPublishConfirmation(ctx);
+  });
+
+  bot.command("publish_article_confirm", async (ctx) => {
+    await runConfirmedPublishArticle(ctx, apiKey, modelId, mcpServers);
+  });
+
+  bot.command("stop_automation", async (ctx) => {
+    await replyStopAutomationNotice(ctx);
+  });
+
+  bot.command("stop_run", async (ctx) => {
+    await replyStopCurrentRunNotice(ctx);
+  });
+
+  bot.command(["sessions", "agents"], async (ctx) => {
+    if (!(await guardDangerous(ctx))) return;
+    const id = String(ctx.chat!.id);
+    const rec = readSessions()[id];
+    if (!rec?.agentId) {
+      await ctx.reply(
+        "Для этого чата нет сохранённой сессии агента. Отправьте задачу обычным текстом или выполните /new_agent.",
+        html,
+      );
+      return;
+    }
+    const pid = rec.personaHash ? `${rec.personaHash.slice(0, 8)}…` : "—";
+    const aid = `${rec.agentId.slice(0, 6)}…${rec.agentId.slice(-4)}`;
+    await ctx.reply(
+      `<b>Сессия агента</b>\n• идентификатор (маска): <code>${escapeHtml(aid)}</code>\n• хеш персоны: <code>${escapeHtml(pid)}</code>`,
+      html,
+    );
+  });
+
+  bot.command("new_agent", async (ctx) => {
+    if (!(await guardDangerous(ctx))) return;
+    const id = String(ctx.chat?.id ?? "");
+    await sessionMutex.runExclusive(async () => {
+      const s = readSessions();
+      delete s[id];
+      writeSessions(s);
+    });
+    await ctx.reply(
+      "Сессия сброшена. Следующее текстовое сообщение создаст новый идентификатор агента в Cursor SDK.",
+      html,
+    );
+  });
+
+  bot.command("reset", async (ctx) => {
+    if (!(await guardDangerous(ctx))) return;
+    const id = String(ctx.chat?.id ?? "");
+    await sessionMutex.runExclusive(async () => {
+      const s = readSessions();
+      delete s[id];
+      writeSessions(s);
+    });
+    await ctx.reply(
+      "Готово. Следующее сообщение начнёт новую беседу с ассистентом.",
+      html,
+    );
+  });
+
+  bot.command("schedule_list", async (ctx) => {
+    if (!(await guardDangerous(ctx))) return;
+    const id = String(ctx.chat!.id);
+    const all = await readSchedules();
+    const s = all[id];
+    if (!s) {
+      await ctx.reply(
+        "<b>Расписание</b> не настроено.\nПримеры: /schedule_every 3h · /schedule_queue_every 3h",
+        html,
+      );
+      return;
+    }
+    await ctx.reply(`<b>Расписание</b>\n${escapeHtml(scheduleSummaryLine(id, s))}`, html);
+  });
+
+  bot.command("schedule", async (ctx) => {
+    if (!(await guardDangerous(ctx))) return;
+    const id = String(ctx.chat!.id);
+    const all = await readSchedules();
+    const s = all[id];
+    if (!s) {
+      await ctx.reply(
+        "Расписание пока не настроено.\n\nПримеры:\n• /schedule_every 3h\n• /schedule_queue_every 3h\n• или в сообщении с задачей: «…публикация раз в 3 часа»",
+      );
+      return;
+    }
+    await ctx.reply(scheduleSummaryLine(id, s));
+  });
+
+  bot.command(["schedule_off", "schedule_stop"], async (ctx) => {
+    if (!(await guardDangerous(ctx))) return;
+    const id = String(ctx.chat!.id);
+    const all = await readSchedules();
+    const s = all[id];
+    if (!s) {
+      await ctx.reply(
+        "Расписание не было включено или ещё не создавалось.",
+      );
+      return;
+    }
+    s.enabled = false;
+    all[id] = s;
+    await writeSchedules(all);
+    await ctx.reply(
+      "Автозапуски отключены. Шаблон сохранён — снова включите через /schedule_every или /schedule_queue_every.",
+    );
+  });
+
+  bot.command("schedule_queue_every", async (ctx) => {
+    if (!(await guardDangerous(ctx))) return;
+    const text = ctx.message?.text?.trim() ?? "";
+    const parts = text.split(/\s+/).slice(1);
+    const arg = parts.join(" ").trim();
+    if (!arg) {
+      await ctx.reply(
+        "Укажите интервал: /schedule_queue_every 3h — каждые 3 часа новая тема из очереди Wordstat.",
+      );
+      return;
+    }
+    const msRaw = parseScheduleEveryArg(arg);
+    if (msRaw === null) {
+      await ctx.reply("Не разобрал интервал. Примеры: 30m, 3h, 1d.");
+      return;
+    }
+    const intervalMs = clampIntervalMs(msRaw);
+    const id = String(ctx.chat!.id);
+    const sitePinned = getSiteForChat(WORKSPACE_ROOT, id);
+    const all = await readSchedules();
+    const prev = all[id];
+    const now = Date.now();
+    const nextRunAt = now + intervalMs;
+    all[id] = {
+      enabled: true,
+      intervalMs,
+      nextRunAt,
+      lastRunAt: prev?.lastRunAt,
+      lastTaskText: WORDSTAT_QUEUE_SENTINEL,
+      wordstatQueue: true,
+      wordstatSite: sitePinned,
+    };
+    await writeSchedules(all);
+    await ctx.reply(
+      `Очередь Wordstat: каждые ${formatIntervalRu(intervalMs)}. Следующий запуск около ${new Date(nextRunAt).toLocaleString("ru-RU")}.`,
+    );
+  });
+
+  bot.command("schedule_every", async (ctx) => {
+    if (!(await guardDangerous(ctx))) return;
+    const text = ctx.message?.text?.trim() ?? "";
+    const parts = text.split(/\s+/).slice(1);
+    const arg = parts.join(" ").trim();
+    if (!arg) {
+      await ctx.reply(
+        "Укажите интервал: /schedule_every 3h или 30m или 1d (от 15 мин до 7 дней).",
+      );
+      return;
+    }
+    const msRaw = parseScheduleEveryArg(arg);
+    if (msRaw === null) {
+      await ctx.reply("Не разобрал интервал. Примеры: 30m, 90мин, 3h, 1d.");
+      return;
+    }
+    const intervalMs = clampIntervalMs(msRaw);
+    if (intervalMs !== msRaw) {
+      await ctx.reply(
+        `Интервал ограничен ${formatIntervalRu(SCHEDULE_MIN_MS)} … ${formatIntervalRu(SCHEDULE_MAX_MS)}. Применяю ${formatIntervalRu(intervalMs)}.`,
+      );
+    }
+    const id = String(ctx.chat!.id);
+    const all = await readSchedules();
+    const prev = all[id];
+    const now = Date.now();
+    const nextRunAt = now + intervalMs;
+    all[id] = {
+      enabled: true,
+      intervalMs,
+      nextRunAt,
+      lastRunAt: prev?.lastRunAt,
+      lastTaskText: prev?.lastTaskText,
+      wordstatQueue: false,
+      wordstatSite: undefined,
+    };
+    await writeSchedules(all);
+    await ctx.reply(
+      `Повтор каждые ${formatIntervalRu(intervalMs)}. Следующий запуск около ${new Date(nextRunAt).toLocaleString("ru-RU")}.\nЕсли шаблон не задан — отправьте задачу обычным текстом.`,
+    );
+  });
+
+  bot
+    .on("message:text")
+    .filter((ctx) => isReplyKeyboardShortcut(ctx.message.text))
+    .use(async (ctx) => {
+      const t = ctx.message.text.trim();
+      if (t === REPLY_KB.MENU) {
+        if (!(await guardOutsider(ctx))) return;
+        await ctx.reply("Выберите раздел меню:", {
+          ...html,
+          reply_markup: menuRootInline(),
+        });
+        return;
+      }
+      if (t === REPLY_KB.STATUS) {
+        if (!(await guardOutsider(ctx))) return;
+        await ctx.reply(await buildStatusHtml(ctx), html);
+        return;
+      }
+      if (t === REPLY_KB.WHOAMI) {
+        if (!(await guardOutsider(ctx))) return;
+        await ctx.reply(whoamiReplyHtml(ctx.chat?.id), html);
+        return;
+      }
+      if (t === REPLY_KB.SESSIONS) {
+        if (!(await guardDangerous(ctx))) return;
+        const id = String(ctx.chat!.id);
+        const rec = readSessions()[id];
+        if (!rec?.agentId) {
+          await ctx.reply(
+            "Для этого чата нет сохранённой сессии агента. Отправьте задачу обычным текстом или выполните /new_agent.",
+            html,
+          );
+          return;
+        }
+        const pid = rec.personaHash ? `${rec.personaHash.slice(0, 8)}…` : "—";
+        const aid = `${rec.agentId.slice(0, 6)}…${rec.agentId.slice(-4)}`;
+        await ctx.reply(
+          `<b>Сессия агента</b>\n• идентификатор (маска): <code>${escapeHtml(aid)}</code>\n• хеш персоны: <code>${escapeHtml(pid)}</code>`,
+          html,
+        );
+        return;
+      }
+      if (t === REPLY_KB.QUEUE_STATUS) {
+        if (!(await guardPeekQueue(ctx))) return;
+        const cid = ctx.chat?.id;
+        if (cid == null) return;
+        await ctx.reply(readWordstatQueueDiagnostics(cid), html);
+        return;
+      }
+      if (t === REPLY_KB.QUEUE_NEXT) {
+        if (!(await guardPeekQueue(ctx))) return;
+        const cid = ctx.chat?.id;
+        if (cid == null) return;
+        await ctx.reply(runWordstatQueuePeek(cid), html);
+        return;
+      }
+      if (t === REPLY_KB.SCHEDULE_LIST) {
+        if (!(await guardDangerous(ctx))) return;
+        const id = String(ctx.chat!.id);
+        const all = await readSchedules();
+        const s = all[id];
+        if (!s) {
+          await ctx.reply(
+            "<b>Расписание</b> не настроено.\nПримеры: /schedule_every 3h · /schedule_queue_every 3h",
+            html,
+          );
+          return;
+        }
+        await ctx.reply(
+          `<b>Расписание</b>\n${escapeHtml(scheduleSummaryLine(id, s))}`,
+          html,
+        );
+        return;
+      }
+      if (t === REPLY_KB.AUTOMATIONS) {
+        if (!(await guardOutsider(ctx))) return;
+        await ctx.reply(listAutomationTemplatesHtml(), html);
+        return;
+      }
+      if (t === REPLY_KB.PUBLISH_ARTICLE) {
+        await replyPublishConfirmation(ctx);
+        return;
+      }
+      if (t === REPLY_KB.STOP_AUTOMATION) {
+        await replyStopAutomationNotice(ctx);
+        return;
+      }
+      if (t === REPLY_KB.STOP_CURRENT_RUN) {
+        await replyStopCurrentRunNotice(ctx);
+        return;
+      }
+    });
+
+  bot.callbackQuery(/^tgmode:(ask|plan|agent)$/, async (ctx) => {
+    if (!(await guardOutsider(ctx))) return;
+    await ctx.answerCallbackQuery();
+    const chatIdStr = String(ctx.chat?.id ?? "");
+    const which = ctx.match![1];
+    if (which === "ask") {
+      await setChatMode(chatIdStr, "ask");
+      await ctx.reply(
+        "<b>Режим Ask</b>\nОбычный текст без <code>/</code> передаётся в Cursor Agent как <b>вопрос или диагностика</b>: без изменения файлов, без терминальных команд, публикаций, commit/push.\n\nВернитесь в рабочий режим: <code>/agent</code> или кнопку «Режим Agent».",
+        html,
+      );
+      return;
+    }
+    if (which === "plan") {
+      await setChatMode(chatIdStr, "plan");
+      await ctx.reply(
+        "<b>Режим Plan</b>\nОбычный текст — только <b>план шагов</b>, без выполнения: без правок файлов, команд, публикаций, commit/push.\n\nРабочий режим: <code>/agent</code> или кнопка «Режим Agent».",
+        html,
+      );
+      return;
+    }
+    await setChatMode(chatIdStr, "agent");
+    await ctx.reply(
+      "<b>Режим Agent</b>\nОбычный текст снова обрабатывается в полном автономном режиме (как раньше).",
+      html,
+    );
+  });
+
+  bot.callbackQuery(/^tgmenu:(\w+)$/, async (ctx) => {
+    if (!(await guardOutsider(ctx))) return;
+    await ctx.answerCallbackQuery();
+    const section = ctx.match![1];
+    let body = "";
+    switch (section) {
+      case "agents":
+        body =
+          "<b>Агенты Cursor</b>\n• /sessions — маска идентификатора сессии\n• /new_agent или /reset — новая сессия\n• Режимы: /ask · /plan · /agent\n• Обычный текст (не команда) → агент (владелец после allowlist).\n";
+        break;
+      case "modes":
+        body =
+          "<b>Режимы</b>\n• Кнопки выше: <code>tgmode:ask|plan|agent</code> или команды /ask · /plan · /agent\n• Публикация статьи: кнопка или /publish_article → <code>/publish_article_confirm</code>\n• Стоп расписаний: кнопка или /stop_automation\n• Снять «занято»: кнопка или /stop_run\n";
+        break;
+      case "auto":
+        body = listAutomationTemplatesHtml();
+        break;
+      case "queue":
+        body =
+          "<b>Очередь Wordstat</b>\n• /queue_status — сводка без изменений\n• /queue_next — предпросмотр (--peek), файлы очереди не меняются\n• /site — текущий профиль · /site_wordprais · /site_bytmaster34\n";
+        break;
+      case "sched":
+        body =
+          "<b>Расписания</b>\n• /schedule_list · /schedule\n• /schedule_every · /schedule_queue_every\n• /schedule_stop\n";
+        break;
+      case "status":
+        body = await buildStatusHtml(ctx);
+        break;
+      case "whoami": {
+        body = whoamiReplyHtml(ctx.chat?.id);
+        break;
+      }
+      default:
+        body = "Раздел не найден.";
+    }
+    try {
+      await ctx.editMessageText(body, {
+        parse_mode: "HTML",
+        reply_markup: menuRootInline(),
+      });
+    } catch {
+      await ctx.reply(body, {
+        parse_mode: "HTML",
+      });
+    }
+  });
+
+  bot
+    .on("message:text")
+    .filter(
+      (ctx) =>
+        !ctx.message.text.trimStart().startsWith("/") &&
+        !isReplyKeyboardShortcut(ctx.message.text),
+    )
+    .use(async (ctx) => {
+      if (!(await guardDangerous(ctx))) return;
+      const chatIdNum = ctx.chat?.id;
+      const chatIdStr = String(chatIdNum);
+      const fullText = ctx.message.text;
+
+      const rawTrim = fullText.trim();
+      if (isExactPublishIntent(rawTrim)) {
+        await replyPublishConfirmation(ctx);
+        return;
+      }
+      if (isExactStopAutomationIntent(rawTrim)) {
+        await replyStopAutomationNotice(ctx);
+        return;
+      }
+      if (isExactStopCurrentRunIntent(rawTrim)) {
+        await replyStopCurrentRunNotice(ctx);
+        return;
+      }
+
+      const natural = matchNaturalSchedule(fullText);
+      let taskText = fullText.trim();
+      let scheduleMs: number | undefined;
+
+      if (natural) {
+        scheduleMs = natural.intervalMs;
+        taskText = stripMatchedSchedule(fullText, natural.matchedRaw);
+      }
+
+      if (scheduleMs !== undefined) {
+        const all = await readSchedules();
+        const prev = all[chatIdStr];
+        if (taskText.length < 8) {
+          const template = prev?.lastTaskText?.trim();
+          if (template) {
+            const queueMode =
+              prev?.wordstatQueue === true &&
+              template === WORDSTAT_QUEUE_SENTINEL;
+            all[chatIdStr] = {
+              enabled: true,
+              intervalMs: scheduleMs,
+              nextRunAt: Date.now() + scheduleMs,
+              lastRunAt: prev?.lastRunAt,
+              lastTaskText: template,
+              wordstatQueue: queueMode,
+              wordstatSite: queueMode ? prev?.wordstatSite : undefined,
+            };
+            await writeSchedules(all);
+            await ctx.reply(
+              `Расписание: каждые ${formatIntervalRu(scheduleMs)}. Буду использовать сохранённый шаблон задачи.`,
+            );
+            return;
+          }
+          await ctx.reply(
+            "Нужен текст задачи в этом же сообщении (ключи, ниша) или сначала отправьте полноценную задачу как шаблон.",
+          );
+          return;
+        }
+        all[chatIdStr] = {
+          enabled: true,
+          intervalMs: scheduleMs,
+          nextRunAt: Date.now() + scheduleMs,
+          lastRunAt: prev?.lastRunAt,
+          lastTaskText: taskText,
+          wordstatQueue: false,
+          wordstatSite: undefined,
+        };
+        await writeSchedules(all);
+      }
+
+      if (busyChats.has(chatIdStr)) {
+        await ctx.reply(
+          "Задача уже выполняется. Дождитесь результата или отправьте /reset.",
+        );
+        return;
+      }
+
+      if (taskText.length < 3) {
+        await ctx.reply("Сообщение слишком короткое — опишите задачу подробнее.");
+        return;
+      }
+
+      busyChats.add(chatIdStr);
+      try {
+        const agentMode = await getChatMode(chatIdStr);
+        await executeAgentJob({
+          chatIdStr,
+          chatIdNum: chatIdNum!,
+          userPlainText: taskText,
+          api: ctx.api,
+          apiKey,
+          modelId,
+          mcpServers,
+          agentMode,
+        });
+      } finally {
+        busyChats.delete(chatIdStr);
+      }
+    });
+
+  setInterval(() => {
+    void (async () => {
+      const all = await readSchedules();
+      const now = Date.now();
+      let changed = false;
+      for (const [chatIdStr, sch] of Object.entries(all)) {
+        if (!sch.enabled || sch.nextRunAt > now) continue;
+        if (!sch.lastTaskText?.trim()) {
+          sch.nextRunAt = now + sch.intervalMs;
+          all[chatIdStr] = sch;
+          changed = true;
+          continue;
+        }
+        if (busyChats.has(chatIdStr)) {
+          sch.nextRunAt = now + Math.min(120_000, sch.intervalMs);
+          all[chatIdStr] = sch;
+          changed = true;
+          continue;
+        }
+        busyChats.add(chatIdStr);
+        try {
+          const chatIdNum = Number(chatIdStr);
+          if (!Number.isFinite(chatIdNum)) {
+            sch.nextRunAt = now + sch.intervalMs;
+            all[chatIdStr] = sch;
+            changed = true;
+            busyChats.delete(chatIdStr);
+            continue;
+          }
+          const tier = accessTier(chatIdNum);
+          if (tier === "bootstrap_open") {
+            sch.nextRunAt = now + sch.intervalMs;
+            all[chatIdStr] = sch;
+            changed = true;
+            busyChats.delete(chatIdStr);
+            continue;
+          }
+          if (tier === "outsider") {
+            sch.enabled = false;
+            all[chatIdStr] = sch;
+            changed = true;
+            busyChats.delete(chatIdStr);
+            console.error(
+              `[telegram-bot] schedule disabled outsider chat_id=${maskChatId(chatIdNum)}`,
+            );
+            continue;
+          }
+          const schedSite =
+            sch.wordstatSite ?? getSiteForChat(WORKSPACE_ROOT, chatIdStr);
+          let userPlainText = sch.lastTaskText!.trim();
+          if (sch.wordstatQueue === true && userPlainText === WORDSTAT_QUEUE_SENTINEL) {
+            const childEnv = wordstatSpawnEnv(WORKSPACE_ROOT, schedSite);
+            const task = resolveWordstatQueueTask(childEnv);
+            const hint = siteAutomationHintBlock(WORKSPACE_ROOT, schedSite).trim();
+            userPlainText = hint ? `${hint}\n\n---\n\n${task}` : task;
+          }
+          await executeAgentJob({
+            chatIdStr,
+            chatIdNum,
+            userPlainText,
+            api: bot.api,
+            apiKey,
+            modelId,
+            mcpServers,
+            scheduled: true,
+            agentMode: "agent",
+          });
+          sch.lastRunAt = now;
+          sch.nextRunAt = now + sch.intervalMs;
+          all[chatIdStr] = sch;
+          changed = true;
+        } catch (e) {
+          console.error("[telegram-bot] scheduled job error", e instanceof Error ? e.message : e);
+          sch.nextRunAt = now + sch.intervalMs;
+          all[chatIdStr] = sch;
+          changed = true;
+        } finally {
+          busyChats.delete(chatIdStr);
+        }
+      }
+      if (changed) await writeSchedules(all);
+    })();
+  }, 60_000);
+
+  try {
+    await bot.api.setMyCommands([
+      { command: "start", description: "Приветствие и клавиатура" },
+      { command: "menu", description: "Меню разделов (inline)" },
+      { command: "help", description: "Справка по командам" },
+      { command: "status", description: "Состояние бота и доступа" },
+      { command: "whoami", description: "Ваш chat_id для whitelist" },
+      { command: "ask", description: "Режим Ask (без правок файлов)" },
+      { command: "plan", description: "Режим Plan (только план)" },
+      { command: "agent", description: "Режим Agent (рабочий)" },
+      { command: "mode_ask", description: "Алиас режима Ask" },
+      { command: "mode_plan", description: "Алиас режима Plan" },
+      { command: "mode_agent", description: "Алиас режима Agent" },
+      { command: "sessions", description: "Сведения о сессии агента" },
+      { command: "new_agent", description: "Новая сессия Cursor SDK" },
+      { command: "reset", description: "Сбросить сессию в этом чате" },
+      { command: "automations", description: "Шаблоны Cursor Automations" },
+      { command: "queue_status", description: "Диагностика очереди Wordstat" },
+      {
+        command: "queue_next",
+        description: "Предпросмотр темы без записи в очередь",
+      },
+      {
+        command: "site",
+        description: "Какой профиль сайта привязан к этому чату",
+      },
+      {
+        command: "site_wordprais",
+        description: "Профиль wordprais для очереди и публикации",
+      },
+      {
+        command: "site_bytmaster34",
+        description: "Профиль bytmaster34 (изолированные файлы)",
+      },
+      {
+        command: "publish_article",
+        description: "Публикация статьи — только инструкция",
+      },
+      {
+        command: "publish_article_confirm",
+        description: "Подтвердить публикацию из очереди",
+      },
+      {
+        command: "stop_automation",
+        description: "Стоп расписаний бота + ссылка Cloud UI",
+      },
+      {
+        command: "stop_run",
+        description: "Снять блок «занято» (текущий запуск в боте)",
+      },
+      { command: "schedule_list", description: "Подробно о расписании" },
+      { command: "schedule", description: "Кратко о расписании" },
+      {
+        command: "schedule_every",
+        description: "Интервал и сохранённый шаблон задачи",
+      },
+      {
+        command: "schedule_queue_every",
+        description: "Интервал и тема из очереди Wordstat",
+      },
+      { command: "schedule_stop", description: "Выключить автозапуски" },
+    ]);
+  } catch {
+    /* игнорируем если API недоступен до старта */
+  }
+
+  console.error(
+    `[telegram-bot] WORKSPACE_ROOT=${WORKSPACE_ROOT} sessions=${SESSIONS_PATH}`,
+  );
+  await bot.start();
+}
+
+main().catch((e) => {
+  const msg = e instanceof Error ? e.message : String(e);
+  console.error(msg);
+  process.exit(1);
+});

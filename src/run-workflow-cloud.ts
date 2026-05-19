@@ -85,7 +85,52 @@ hydrateMcpKvFromCursorMcpJson();
 const EXTRACTED = path.join(ROOT, "prompts", "_extracted");
 const ART = path.join(ROOT, "artifacts");
 
+function normQueuePhrase(text: string): string {
+  return String(text ?? "")
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hydrateWordstatQueueMeta(topicRaw: string, state: SavedState): void {
+  try {
+    const lastPath = path.join(ART, "wordstat-queue-last.json");
+    if (!existsSync(lastPath)) return;
+    const last = JSON.parse(readFileSync(lastPath, "utf-8")) as {
+      mode?: string;
+      phrase?: string;
+      keywordId?: string;
+    };
+    if (last?.mode !== "topic" || typeof last.phrase !== "string") return;
+    if (normQueuePhrase(last.phrase) !== normQueuePhrase(topicRaw)) return;
+    state.wordstatQueuePhrase = last.phrase.trim();
+    if (typeof last.keywordId === "string" && last.keywordId.trim())
+      state.wordstatKeywordId = last.keywordId.trim();
+  } catch {
+    /* noop */
+  }
+}
+
 let loggedLocalRuntime = false;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function cursorStepMaxAttempts(): number {
+  const n = Number(process.env.CURSOR_STEP_MAX_ATTEMPTS ?? "3");
+  return Number.isFinite(n) ? Math.min(6, Math.max(1, Math.floor(n))) : 3;
+}
+
+function cursorStepRetryDelayMs(attempt: number): number {
+  const base = Number(process.env.CURSOR_STEP_RETRY_DELAY_MS ?? "30000");
+  const safeBase = Number.isFinite(base)
+    ? Math.min(300000, Math.max(1000, base))
+    : 30000;
+  return Math.min(300000, safeBase * Math.max(1, attempt));
+}
 
 function useLocalAgent(): boolean {
   return (
@@ -363,23 +408,39 @@ async function cursorCloud(prompt: string, label: string): Promise<string> {
 
   attachMcpServers(opts);
 
-  console.error(`[step] ▶ ${label}`);
-  try {
-    const result = await Agent.prompt(prompt, opts);
-    if (result.status === "error") {
-      console.error(`[step] ✖ ${label} статус=${result.status}`);
-      process.exitCode = 2;
+  const maxAttempts = cursorStepMaxAttempts();
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    console.error(`[step] ${label} attempt=${attempt}/${maxAttempts}`);
+    try {
+      const result = await Agent.prompt(prompt, opts);
+      if (result.status === "error") {
+        console.error(`[step] ${label} status=${result.status}`);
+        if (attempt < maxAttempts) {
+          const delayMs = cursorStepRetryDelayMs(attempt);
+          console.error(`[step] retry ${label} after status=error in ${delayMs}ms`);
+          await sleep(delayMs);
+          continue;
+        }
+        process.exitCode = 2;
+      }
+      return (result.result ?? "").trimEnd();
+    } catch (e) {
+      if (e instanceof CursorAgentError) {
+        console.error(
+          `[step] CursorAgentError ${label}: ${e.message} retryable=${e.isRetryable}`,
+        );
+        if (e.isRetryable && attempt < maxAttempts) {
+          const delayMs = cursorStepRetryDelayMs(attempt);
+          console.error(`[step] retry ${label} after CursorAgentError in ${delayMs}ms`);
+          await sleep(delayMs);
+          continue;
+        }
+        process.exit(1);
+      }
+      throw e;
     }
-    return (result.result ?? "").trimEnd();
-  } catch (e) {
-    if (e instanceof CursorAgentError) {
-      console.error(
-        `[step] CursorAgentError ${label}: ${e.message} retryable=${e.isRetryable}`,
-      );
-      process.exit(1);
-    }
-    throw e;
   }
+  throw new Error(`Cursor step exhausted retries: ${label}`);
 }
 
 export function extractSection(full: string, headingWithHash: string): string {
@@ -403,6 +464,630 @@ export function extractPublicImageUrlFromAgentText(answer: string): string | und
   /** последний очевидный URL картинки */
   const all = [...answer.matchAll(/https?:\/\/[^\s"'<>\][]+\.(png|jpg|jpeg|webp)(\?[^\s"'<>\][]*)?/gi)].map((m) => m[0]);
   return all[all.length - 1]?.replace(/[,;.]$/, "").trim();
+}
+
+function extractMediaIdFromAgentText(answer: string): number | undefined {
+  const m =
+    answer.match(/\bWP_MEDIA_ID\s*=\s*(\d+)/i) ||
+    answer.match(/\b(?:ID|media[_ ]?id)\s*[:=]\s*(\d+)/i) ||
+    answer.match(/"id"\s*:\s*(\d+)/i);
+  return m ? Number(m[1]) : undefined;
+}
+
+function shouldRequirePermanentMedia(status: string): boolean {
+  return (
+    String(process.env.WP_REQUIRE_PERMANENT_MEDIA ?? "").toLowerCase() ===
+      "true" || status.toLowerCase() === "publish"
+  );
+}
+
+function isPermanentWordpressOrCdnUrl(raw: string | undefined): boolean {
+  if (!raw) return false;
+  let u: URL;
+  try {
+    u = new URL(raw.trim());
+  } catch {
+    return false;
+  }
+  if (!/^https?:$/i.test(u.protocol)) return false;
+  const host = u.hostname.toLowerCase();
+  const pathname = u.pathname.toLowerCase();
+  if (
+    host === "localhost" ||
+    host.endsWith(".local") ||
+    host.includes("unsplash.com")
+  ) {
+    return false;
+  }
+  const envHosts = (process.env.PERMANENT_MEDIA_HOSTS || "")
+    .split(/[,;\s]+/)
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean);
+  if (envHosts.some((h) => host === h || host.endsWith(`.${h}`))) return true;
+  if (pathname.includes("/wp-content/uploads/")) return true;
+  return (
+    host.includes("cdn") ||
+    host.endsWith(".wp.com") ||
+    host.endsWith(".wordpress.com") ||
+    host.endsWith(".cloudfront.net") ||
+    host.endsWith(".cloudinary.com") ||
+    host.endsWith(".imgix.net") ||
+    host.endsWith(".b-cdn.net") ||
+    host.endsWith(".fastly.net")
+  );
+}
+
+function writeMediaActionRequired(
+  state: SavedState,
+  details: Record<string, unknown>,
+): void {
+  const result = {
+    ok: false,
+    actionRequired: "generate_and_upload_cover_16_9_and_banner_21_9",
+    reason: "publish_blocked_missing_permanent_media",
+    ...details,
+  };
+  state.mediaResult = result;
+  state.keywordStatus = "pending";
+  state.publishBlocked = true;
+  mkdirSync(ART, { recursive: true });
+  writeFileSync(
+    path.join(ART, "media-result.json"),
+    JSON.stringify(result, null, 2),
+    "utf-8",
+  );
+  saveState(state);
+}
+
+function stripHtmlTags(html: string): string {
+  return html
+    .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function countRegex(text: string, pattern: RegExp): number {
+  return text.match(pattern)?.length ?? 0;
+}
+
+function loadQualityHardGates(): {
+  minimumFinalHtmlCharacters: number;
+  minimumContentHeadingsH2H3: number;
+  minimumH2: number;
+  minimumH3: number;
+  minimumParagraphs: number;
+  minimumInternalLinks: number;
+  minimumArticleImages: number;
+  minimumJsonLdScripts: number;
+  minimumUsefulSectionCharacters: number;
+  maxThinSections: number;
+  minimumFaqDetails: number;
+  maxHumanizerSlopHits: number;
+  maxDuplicateHeadingOccurrences: number;
+  maxDuplicateParagraphOccurrences: number;
+  titleMinCharacters: number;
+  titleMaxCharacters: number;
+  metaDescriptionMinCharacters: number;
+  metaDescriptionMaxCharacters: number;
+  forbiddenGenericHeadings: string[];
+  requiredHtmlMarkers: string[];
+  forbiddenHtmlMarkers: string[];
+  humanizerSlopMarkers: string[];
+  requiredStages: Array<{ id: string; required?: boolean; artifactField?: string }>;
+} {
+  const fallback = {
+    minimumFinalHtmlCharacters: 12000,
+    minimumContentHeadingsH2H3: 8,
+    minimumH2: 7,
+    minimumH3: 3,
+    minimumParagraphs: 24,
+    minimumInternalLinks: 4,
+    minimumArticleImages: 1,
+    minimumJsonLdScripts: 1,
+    minimumUsefulSectionCharacters: 180,
+    maxThinSections: 1,
+    minimumFaqDetails: 5,
+    maxHumanizerSlopHits: 3,
+    maxDuplicateHeadingOccurrences: 1,
+    maxDuplicateParagraphOccurrences: 1,
+    titleMinCharacters: 45,
+    titleMaxCharacters: 120,
+    metaDescriptionMinCharacters: 90,
+    metaDescriptionMaxCharacters: 170,
+    forbiddenGenericHeadings: [
+      "Практический нюанс внедрения",
+      "Важный нюанс",
+      "Дополнительный блок",
+      "Полезная информация",
+      "Что важно знать",
+    ],
+    requiredHtmlMarkers: [
+      "article-table-scroll",
+      "wp-block-table",
+      "scope=\"col\"",
+      "article-banner",
+      "<details",
+      "Остались вопросы",
+      "пишите в комментариях",
+    ],
+    forbiddenHtmlMarkers: [
+      "NEEDS_REWRITE",
+      "Lorem ipsum",
+      "Страница не найдена",
+      "Oops",
+      "error-404",
+    ],
+    humanizerSlopMarkers: [
+      "важно отметить",
+      "следует отметить",
+      "в современном мире",
+      "в условиях стремительного",
+      "таким образом",
+      "данная статья",
+      "не только, но и",
+      "уникальный",
+      "революционный",
+    ],
+    requiredStages: [
+      { id: "seo-content-writer", required: true, artifactField: "seoContentWriterPassed" },
+      { id: "geo-ai-search-optimizer", required: true, artifactField: "geoAiSearchOptimizerPassed" },
+      { id: "russian-humanizer", required: true, artifactField: "russianHumanizerPassed" },
+      { id: "media-director", required: true, artifactField: "mediaDirectorPassed" },
+      {
+        id: "keyword-topic-uniqueness-guardian",
+        required: true,
+        artifactField: "keywordTopicUniquenessGuardianPassed",
+      },
+      {
+        id: "mayai-structure-guardian",
+        required: true,
+        artifactField: "mayaiStructureGuardianPassed",
+      },
+      {
+        id: "html-semantics-guardian",
+        required: true,
+        artifactField: "htmlSemanticsGuardianPassed",
+      },
+      {
+        id: "meta-media-guardian",
+        required: true,
+        artifactField: "metaMediaGuardianPassed",
+      },
+      { id: "content-structure-director", required: true, artifactField: "contentStructureDirectorPassed" },
+    ],
+  };
+  const p = path.join(ROOT, "config", "agent-orchestration.json");
+  try {
+    if (!existsSync(p)) return fallback;
+    const cfg = JSON.parse(readFileSync(p, "utf-8")) as {
+      hardGates?: Partial<typeof fallback>;
+      requiredStages?: typeof fallback.requiredStages;
+    };
+    return {
+      minimumFinalHtmlCharacters:
+        Number(cfg.hardGates?.minimumFinalHtmlCharacters) ||
+        fallback.minimumFinalHtmlCharacters,
+      minimumContentHeadingsH2H3:
+        Number(cfg.hardGates?.minimumContentHeadingsH2H3) ||
+        fallback.minimumContentHeadingsH2H3,
+      minimumH2: Number(cfg.hardGates?.minimumH2) || fallback.minimumH2,
+      minimumH3: Number(cfg.hardGates?.minimumH3) || fallback.minimumH3,
+      minimumParagraphs:
+        Number(cfg.hardGates?.minimumParagraphs) || fallback.minimumParagraphs,
+      minimumInternalLinks:
+        Number(cfg.hardGates?.minimumInternalLinks) ||
+        fallback.minimumInternalLinks,
+      minimumArticleImages:
+        Number(cfg.hardGates?.minimumArticleImages) ||
+        fallback.minimumArticleImages,
+      minimumJsonLdScripts:
+        Number(cfg.hardGates?.minimumJsonLdScripts) ||
+        fallback.minimumJsonLdScripts,
+      minimumUsefulSectionCharacters:
+        Number(cfg.hardGates?.minimumUsefulSectionCharacters) ||
+        fallback.minimumUsefulSectionCharacters,
+      maxThinSections:
+        Number(cfg.hardGates?.maxThinSections) || fallback.maxThinSections,
+      minimumFaqDetails:
+        Number(cfg.hardGates?.minimumFaqDetails) || fallback.minimumFaqDetails,
+      maxHumanizerSlopHits:
+        Number(cfg.hardGates?.maxHumanizerSlopHits) ||
+        fallback.maxHumanizerSlopHits,
+      maxDuplicateHeadingOccurrences:
+        Number(cfg.hardGates?.maxDuplicateHeadingOccurrences) ||
+        fallback.maxDuplicateHeadingOccurrences,
+      maxDuplicateParagraphOccurrences:
+        Number(cfg.hardGates?.maxDuplicateParagraphOccurrences) ||
+        fallback.maxDuplicateParagraphOccurrences,
+      titleMinCharacters:
+        Number(cfg.hardGates?.titleMinCharacters) || fallback.titleMinCharacters,
+      titleMaxCharacters:
+        Number(cfg.hardGates?.titleMaxCharacters) || fallback.titleMaxCharacters,
+      metaDescriptionMinCharacters:
+        Number(cfg.hardGates?.metaDescriptionMinCharacters) ||
+        fallback.metaDescriptionMinCharacters,
+      metaDescriptionMaxCharacters:
+        Number(cfg.hardGates?.metaDescriptionMaxCharacters) ||
+        fallback.metaDescriptionMaxCharacters,
+      forbiddenGenericHeadings:
+        cfg.hardGates?.forbiddenGenericHeadings ?? fallback.forbiddenGenericHeadings,
+      requiredHtmlMarkers:
+        cfg.hardGates?.requiredHtmlMarkers ?? fallback.requiredHtmlMarkers,
+      forbiddenHtmlMarkers:
+        cfg.hardGates?.forbiddenHtmlMarkers ?? fallback.forbiddenHtmlMarkers,
+      humanizerSlopMarkers:
+        cfg.hardGates?.humanizerSlopMarkers ?? fallback.humanizerSlopMarkers,
+      requiredStages: cfg.requiredStages ?? fallback.requiredStages,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function humanizerSlopHits(text: string, markers: readonly string[]): string[] {
+  const lower = text.toLowerCase();
+  return markers.filter((marker) => lower.includes(marker.toLowerCase()));
+}
+
+function hasAllMarkers(html: string, markers: readonly string[]): boolean {
+  return markers.every((marker) => html.includes(marker));
+}
+
+function normalizeHeading(text: string): string {
+  return stripHtmlTags(text)
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[^\p{L}\p{N}\s:-]/gu, "")
+    .trim();
+}
+
+function duplicateHeadings(html: string): Array<{ heading: string; count: number }> {
+  const counts = new Map<string, number>();
+  const re = /<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(html)) !== null) {
+    const heading = normalizeHeading(match[1] ?? "");
+    if (!heading) continue;
+    counts.set(heading, (counts.get(heading) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([heading, count]) => ({ heading, count }));
+}
+
+function extractBlocks(html: string, tag: string): string[] {
+  const out: string[] = [];
+  const re = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "gi");
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(html)) !== null) out.push(match[1] ?? "");
+  return out;
+}
+
+function duplicateParagraphs(html: string): Array<{ paragraph: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const raw of extractBlocks(html, "p")) {
+    const paragraph = stripHtmlTags(raw)
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+    if (paragraph.length < 90) continue;
+    counts.set(paragraph, (counts.get(paragraph) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([paragraph, count]) => ({ paragraph: paragraph.slice(0, 180), count }));
+}
+
+function thinSections(html: string, minChars: number): Array<{ heading: string; chars: number }> {
+  const out: Array<{ heading: string; chars: number }> = [];
+  const re = /<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>([\s\S]*?)(?=<h[23]\b|$)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(html)) !== null) {
+    const heading = normalizeHeading(match[1] ?? "");
+    const chars = stripHtmlTags(match[2] ?? "").length;
+    if (heading && chars < minChars) out.push({ heading, chars });
+  }
+  return out;
+}
+
+function imageIssues(html: string): Array<Record<string, unknown>> {
+  const issues: Array<Record<string, unknown>> = [];
+  const re = /<img\b([^>]*?)>/gi;
+  let match: RegExpExecArray | null;
+  let index = 0;
+  while ((match = re.exec(html)) !== null) {
+    index += 1;
+    const attrs = match[1] ?? "";
+    const src = attrs.match(/\bsrc\s*=\s*["']([^"']+)["']/i)?.[1]?.trim() ?? "";
+    const alt = attrs.match(/\balt\s*=\s*["']([^"']*)["']/i)?.[1]?.trim() ?? "";
+    if (!/^https?:\/\//i.test(src)) issues.push({ index, code: "image_missing_http_src" });
+    if (!alt || alt.length < 12) issues.push({ index, code: "image_missing_useful_alt" });
+  }
+  return issues;
+}
+
+function normalizedTokenSet(text: string): Set<string> {
+  return new Set(
+    stripHtmlTags(text)
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 4),
+  );
+}
+
+function keywordCoverageOk(state: SavedState, html: string): boolean {
+  const source = [state.seeds?.k1, state.seeds?.k2, state.seeds?.k3, state.wordstatSynth]
+    .filter(Boolean)
+    .join(" ");
+  const sourceTokens = [...normalizedTokenSet(source)].filter(
+    (token) => !["wordpress", "wordprais"].includes(token),
+  );
+  if (sourceTokens.length === 0) return true;
+  const titleAndHtml = normalizedTokenSet(`${state.seoTitle ?? ""} ${html}`);
+  const covered = sourceTokens.filter((token) => titleAndHtml.has(token)).length;
+  return covered >= Math.min(2, sourceTokens.length);
+}
+
+function metaOk(meta: string | undefined, min: number, max: number): boolean {
+  const text = stripHtmlTags(meta ?? "").replace(/\s+/g, " ").trim();
+  return text.length >= min && text.length <= max && !/NEEDS_REWRITE|Lorem ipsum/i.test(text);
+}
+
+function computeQualityGates(html: string, state: SavedState): Record<string, boolean> {
+  const hard = loadQualityHardGates();
+  const text = stripHtmlTags(html);
+  const h2h3 = countRegex(html, /<h[23]\b/gi);
+  const h2 = countRegex(html, /<h2\b/gi);
+  const h3 = countRegex(html, /<h3\b/gi);
+  const paragraphs = countRegex(html, /<p\b/gi);
+  const internalLinks = countRegex(html, /<a\b[^>]+href=["']https?:\/\/wordprais\.ru\//gi);
+  const images = countRegex(html, /<img\b/gi);
+  const jsonLd = countRegex(html, /<script\b[^>]+application\/ld\+json/gi);
+  const details = countRegex(html, /<details\b/gi);
+  const hasRequiredMarkers = hasAllMarkers(html, hard.requiredHtmlMarkers);
+  const hasForbiddenMarkers = hard.forbiddenHtmlMarkers.some((marker) =>
+    html.toLowerCase().includes(marker.toLowerCase()),
+  );
+  const tableOk =
+    /border-collapse\s*:\s*collapse/i.test(html) &&
+    /padding\s*:\s*11px\s+14px/i.test(html);
+  const mediaOk = Boolean(
+    state.coverNanoPublicUrl?.startsWith("http") &&
+      state.bannerNanoPublicUrl?.startsWith("http") &&
+      (state.midArticleBannerSrcUrl?.startsWith("http") ||
+        state.bannerWordpressPublicUrl?.startsWith("http")) &&
+      html.includes("article-banner"),
+  );
+  const slopHits = humanizerSlopHits(text, hard.humanizerSlopMarkers);
+  const titleLength = stripHtmlTags(state.seoTitle ?? "").length;
+  const titleOk =
+    titleLength >= hard.titleMinCharacters && titleLength <= hard.titleMaxCharacters;
+  const metaDescriptionOk = metaOk(
+    state.metaDescription,
+    hard.metaDescriptionMinCharacters,
+    hard.metaDescriptionMaxCharacters,
+  );
+  const duplicateParagraphsOk = duplicateParagraphs(html).every(
+    (item) => item.count <= hard.maxDuplicateParagraphOccurrences,
+  );
+  const noGenericHeadings = hard.forbiddenGenericHeadings.every((generic) => {
+    const needle = normalizeHeading(generic);
+    return !duplicateHeadings(`<h2>${generic}</h2>${html}`).some(
+      (item) => item.heading === needle || item.heading.includes(needle),
+    );
+  });
+  const semanticBlocksOk =
+    h2 >= hard.minimumH2 &&
+    h3 >= hard.minimumH3 &&
+    paragraphs >= hard.minimumParagraphs &&
+    internalLinks >= hard.minimumInternalLinks &&
+    images >= hard.minimumArticleImages &&
+    jsonLd >= hard.minimumJsonLdScripts &&
+    thinSections(html, hard.minimumUsefulSectionCharacters).length <= hard.maxThinSections &&
+    imageIssues(html).length === 0 &&
+    duplicateParagraphsOk &&
+    noGenericHeadings &&
+    keywordCoverageOk(state, html);
+  const depthOk =
+    text.length >= hard.minimumFinalHtmlCharacters &&
+    h2h3 >= hard.minimumContentHeadingsH2H3;
+  const faqOk = details >= hard.minimumFaqDetails;
+  const htmlStructureOk =
+    depthOk &&
+    faqOk &&
+    hasRequiredMarkers &&
+    !hasForbiddenMarkers &&
+    !/<h1\b/i.test(html) &&
+    tableOk &&
+    semanticBlocksOk &&
+    duplicateHeadings(html).every(
+      (item) => item.count <= hard.maxDuplicateHeadingOccurrences,
+    );
+
+  return {
+    seoContentWriterPassed: Boolean(state.seoTitle) && titleOk && depthOk && tableOk,
+    geoAiSearchOptimizerPassed: faqOk && tableOk && hasRequiredMarkers,
+    russianHumanizerPassed:
+      !hasForbiddenMarkers && slopHits.length <= hard.maxHumanizerSlopHits,
+    mediaDirectorPassed: mediaOk,
+    contentStructureDirectorPassed: htmlStructureOk && mediaOk,
+    htmlSemanticsGuardianPassed: semanticBlocksOk,
+    metaMediaGuardianPassed: titleOk && metaDescriptionOk && mediaOk,
+    keywordTopicUniquenessGuardianPassed: keywordCoverageOk(state, html),
+    mayaiStructureGuardianPassed: htmlStructureOk && semanticBlocksOk,
+  };
+}
+
+function articleQualityFindings(
+  html: string,
+  state: SavedState,
+): Array<Record<string, unknown>> {
+  const hard = loadQualityHardGates();
+  const text = stripHtmlTags(html);
+  const h2h3 = countRegex(html, /<h[23]\b/gi);
+  const h2 = countRegex(html, /<h2\b/gi);
+  const h3 = countRegex(html, /<h3\b/gi);
+  const paragraphs = countRegex(html, /<p\b/gi);
+  const internalLinks = countRegex(html, /<a\b[^>]+href=["']https?:\/\/wordprais\.ru\//gi);
+  const images = countRegex(html, /<img\b/gi);
+  const jsonLd = countRegex(html, /<script\b[^>]+application\/ld\+json/gi);
+  const details = countRegex(html, /<details\b/gi);
+  const findings: Array<Record<string, unknown>> = [];
+
+  if (text.length < hard.minimumFinalHtmlCharacters) {
+    findings.push({
+      code: "article_too_short",
+      actual: text.length,
+      expected: `>=${hard.minimumFinalHtmlCharacters}`,
+    });
+  }
+  if (h2h3 < hard.minimumContentHeadingsH2H3) {
+    findings.push({
+      code: "not_enough_h2_h3",
+      actual: h2h3,
+      expected: `>=${hard.minimumContentHeadingsH2H3}`,
+    });
+  }
+  if (h2 < hard.minimumH2) findings.push({ code: "not_enough_h2", actual: h2, expected: `>=${hard.minimumH2}` });
+  if (h3 < hard.minimumH3) findings.push({ code: "not_enough_h3", actual: h3, expected: `>=${hard.minimumH3}` });
+  if (paragraphs < hard.minimumParagraphs)
+    findings.push({ code: "not_enough_paragraphs", actual: paragraphs, expected: `>=${hard.minimumParagraphs}` });
+  if (internalLinks < hard.minimumInternalLinks)
+    findings.push({ code: "not_enough_internal_links", actual: internalLinks, expected: `>=${hard.minimumInternalLinks}` });
+  if (images < hard.minimumArticleImages)
+    findings.push({ code: "missing_article_images", actual: images, expected: `>=${hard.minimumArticleImages}` });
+  if (jsonLd < hard.minimumJsonLdScripts)
+    findings.push({ code: "missing_schema_json_ld", actual: jsonLd, expected: `>=${hard.minimumJsonLdScripts}` });
+  if (/<h1\b/i.test(html)) findings.push({ code: "h1_inside_post_body" });
+  for (const marker of hard.requiredHtmlMarkers) {
+    if (!html.includes(marker)) findings.push({ code: "missing_html_marker", marker });
+  }
+  for (const item of duplicateHeadings(html)) {
+    if (item.count > hard.maxDuplicateHeadingOccurrences) {
+      findings.push({
+        code: "duplicate_h2_h3_heading",
+        heading: item.heading,
+        actual: item.count,
+        expected: `<=${hard.maxDuplicateHeadingOccurrences}`,
+      });
+    }
+  }
+  for (const item of duplicateParagraphs(html)) {
+    if (item.count > hard.maxDuplicateParagraphOccurrences) {
+      findings.push({
+        code: "duplicate_paragraph",
+        paragraph: item.paragraph,
+        actual: item.count,
+        expected: `<=${hard.maxDuplicateParagraphOccurrences}`,
+      });
+    }
+  }
+  const thin = thinSections(html, hard.minimumUsefulSectionCharacters);
+  if (thin.length > hard.maxThinSections) {
+    findings.push({
+      code: "too_many_thin_sections",
+      actual: thin.length,
+      expected: `<=${hard.maxThinSections}`,
+      examples: thin.slice(0, 5),
+    });
+  }
+  for (const generic of hard.forbiddenGenericHeadings) {
+    const needle = normalizeHeading(generic);
+    const hasGeneric = extractBlocks(html, "h2")
+      .concat(extractBlocks(html, "h3"))
+      .map(normalizeHeading)
+      .some((heading) => heading === needle || heading.includes(needle));
+    if (hasGeneric) findings.push({ code: "generic_heading_forbidden", heading: generic });
+  }
+  for (const issue of imageIssues(html)) findings.push(issue);
+  const titleLength = stripHtmlTags(state.seoTitle ?? "").length;
+  if (titleLength < hard.titleMinCharacters || titleLength > hard.titleMaxCharacters) {
+    findings.push({
+      code: "invalid_seo_title_length",
+      actual: titleLength,
+      expected: `${hard.titleMinCharacters}-${hard.titleMaxCharacters}`,
+    });
+  }
+  if (
+    state.metaDescription &&
+    !metaOk(
+      state.metaDescription,
+      hard.metaDescriptionMinCharacters,
+      hard.metaDescriptionMaxCharacters,
+    )
+  ) {
+    findings.push({
+      code: "invalid_meta_description",
+      actual: stripHtmlTags(state.metaDescription).length,
+      expected: `${hard.metaDescriptionMinCharacters}-${hard.metaDescriptionMaxCharacters}`,
+    });
+  }
+  if (!keywordCoverageOk(state, html)) findings.push({ code: "primary_keyword_not_covered" });
+  if (details < hard.minimumFaqDetails)
+    findings.push({
+      code: "faq_details_too_few",
+      actual: details,
+      expected: `>=${hard.minimumFaqDetails}`,
+    });
+  if (!/border-collapse\s*:\s*collapse/i.test(html))
+    findings.push({ code: "table_without_border_collapse" });
+  if (!/padding\s*:\s*11px\s+14px/i.test(html))
+    findings.push({ code: "table_without_required_cell_padding" });
+  for (const marker of hard.forbiddenHtmlMarkers) {
+    if (html.toLowerCase().includes(marker.toLowerCase()))
+      findings.push({ code: "forbidden_html_marker", marker });
+  }
+
+  const slopHits = humanizerSlopHits(text, hard.humanizerSlopMarkers);
+  if (slopHits.length > hard.maxHumanizerSlopHits) {
+    findings.push({
+      code: "humanizer_slop_markers_too_many",
+      actual: slopHits.length,
+      expected: `<=${hard.maxHumanizerSlopHits}`,
+      markers: slopHits,
+    });
+  }
+
+  const quality = state.qualityGates ?? {};
+  for (const stage of hard.requiredStages) {
+    if (!stage.required) continue;
+    const field = stage.artifactField;
+    if (!field) continue;
+    if (quality[field] !== true && state[field as keyof SavedState] !== true) {
+      findings.push({ code: "required_stage_missing", stage: stage.id, field });
+    }
+  }
+  return findings;
+}
+
+function writeQualityActionRequired(
+  state: SavedState,
+  findings: Array<Record<string, unknown>>,
+): void {
+  const result = {
+    ok: false,
+    actionRequired: "rewrite_article_with_content_structure_director",
+    reason: "publish_blocked_article_quality_gate",
+    textCharacters: stripHtmlTags(state.articleHtml ?? "").length,
+    h2h3Count: countRegex(state.articleHtml ?? "", /<h[23]\b/gi),
+    qualityGates: state.qualityGates ?? null,
+    findings,
+  };
+  state.qualityResult = result;
+  state.keywordStatus = "pending";
+  state.publishBlocked = true;
+  mkdirSync(ART, { recursive: true });
+  writeFileSync(
+    path.join(ART, "qa-report.json"),
+    JSON.stringify(result, null, 2),
+    "utf-8",
+  );
+  saveState(state);
 }
 
 function parseSeeds(raw: string): { k1: string; k2: string; k3: string } {
@@ -492,6 +1177,38 @@ function nanoToolFooter(args: {
   refs: string[];
   urlMarker: "PRIMARY_COVER_IMAGE_URL" | "MID_BANNER_IMAGE_URL";
 }): string {
+  {
+    const arr = JSON.stringify(args.refs);
+    return `
+---
+# MCP image generation with fallback chain
+
+Use the Make blueprint prompt above as the source of truth. The first reference image is the identity reference: keep the same face, glasses, approximate age and recognizability. Do not add a cap or hood. Do not make the image cartoon, 3D, anime, illustration, or use Latin/English visible text. Any visible text must be Russian Cyrillic.
+
+Try image tools in this exact order until one produces a usable public image URL:
+1. nano_banana_pro
+2. gpt_image_2
+3. nano_banana_2
+4. any other available MCP image generation/editing model
+
+For nano_banana_pro / nano_banana_2 use:
+- prompt: the full scenario above this block
+- image_input: ${arr}
+- aspect_ratio: "${args.aspect_ratio}"
+- resolution: "${args.resolution}"
+- output_format: "${args.output_format}"
+
+For gpt_image_2 use equivalent arguments:
+- prompt: the full scenario above this block
+- input_urls: ${arr}
+- aspect_ratio: "${args.aspect_ratio}"
+- resolution: "${args.resolution === "4K" ? "2K" : args.resolution}"
+
+If every image model fails, report the failure clearly. Publication is blocked later unless both cover and banner have generated URLs and permanent WordPress/CDN uploads.
+
+Last response line, exactly:
+${args.urlMarker}=https://...`;
+  }
   const arr = JSON.stringify(args.refs);
   const modelHint =
     args.tool === MCP_TOOL_NANO_FALLBACK_LITE
@@ -515,7 +1232,7 @@ ${args.urlMarker}=https://... (публичный URL готового изоб�
 
 async function wordpressUploadBannerIfConfigured(
   fileUrl: string,
-): Promise<string | undefined> {
+): Promise<{ id?: number; publicUrl?: string; raw: string } | undefined> {
   /** отключено явно через env */
   if (
     String(
@@ -540,18 +1257,68 @@ caption=""
 Последней строкой: WP_MEDIA_PUBLIC_URL=https://... (берётся из source_url/link ответа).`;
 
   const raw = await cursorCloud(p, "11 wordpress_upload_media banner");
-  return extractPublicImageUrlFromAgentText(raw);
+  return {
+    id: extractMediaIdFromAgentText(raw),
+    publicUrl: extractPublicImageUrlFromAgentText(raw),
+    raw,
+  };
+}
+
+async function wordpressUploadCoverIfConfigured(
+  fileUrl: string,
+  title: string,
+): Promise<{ id?: number; publicUrl?: string; raw: string } | undefined> {
+  const safeTitle = title.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const p = `# Upload required 16:9 cover to WordPress media
+
+Tool: **${MCP_TOOL_WP_UPLOAD_MEDIA}**.
+Arguments:
+file_url="${fileUrl}"
+title="${safeTitle.slice(0, 120)}"
+alt_text="${safeTitle.slice(0, 180)}"
+caption=""
+
+Do not publish or update a post. Upload only.
+Last line exactly: WP_MEDIA_ID=123 WP_MEDIA_PUBLIC_URL=https://...`;
+
+  const raw = await cursorCloud(p, "cover wordpress_upload_media");
+  return {
+    id: extractMediaIdFromAgentText(raw),
+    publicUrl: extractPublicImageUrlFromAgentText(raw),
+    raw,
+  };
 }
 
 
 interface SavedState {
   topic: string;
+  /** Совпадает с `artifacts/wordstat-queue-last.json`, если очередь зарезервировала этот ключ */
+  wordstatQueuePhrase?: string;
+  wordstatKeywordId?: string;
   seedsRaw?: string;
   seeds?: { k1: string; k2: string; k3: string };
   wordstatSynth?: string;
   seoTitle?: string;
   coverNanoPublicUrl?: string;
   bannerNanoPublicUrl?: string;
+  coverWordpressMediaId?: number;
+  coverWordpressPublicUrl?: string;
+  bannerWordpressMediaId?: number;
+  bannerWordpressPublicUrl?: string;
+  mediaResult?: Record<string, unknown>;
+  qualityResult?: Record<string, unknown>;
+  qualityGates?: Record<string, boolean>;
+  seoContentWriterPassed?: boolean;
+  russianHumanizerPassed?: boolean;
+  contentStructureDirectorPassed?: boolean;
+  geoAiSearchOptimizerPassed?: boolean;
+  mediaDirectorPassed?: boolean;
+  htmlSemanticsGuardianPassed?: boolean;
+  metaMediaGuardianPassed?: boolean;
+  keywordTopicUniquenessGuardianPassed?: boolean;
+  mayaiStructureGuardianPassed?: boolean;
+  keywordStatus?: "pending" | "published" | "failed";
+  publishBlocked?: boolean;
   midArticleBannerSrcUrl?: string;
   research?: string;
   articleHtml?: string;
@@ -620,6 +1387,8 @@ async function main(): Promise<void> {
   const state: SavedState = {
     topic: topicRaw,
   };
+  mkdirSync(ART, { recursive: true });
+  hydrateWordstatQueueMeta(topicRaw, state);
 
   /** 39 — три сид-фразы */
   let seedsPrompt = stripBlueprintHeader(loadMdByModule(39));
@@ -690,6 +1459,9 @@ ${JSON.stringify(state.seeds, null, 2)}
   if (!nanoSkip) {
     let coverTpl = stripBlueprintHeader(loadMdByModule(5));
     coverTpl = coverTpl.replace(/\{\{40\.content\}\}/g, state.seoTitle!);
+    coverTpl += `\n\nWORDPRAIS NICHE ADAPTATION:
+Use the Make blueprint cover logic from module 5, but adapt only the niche: this is for a Russian WordPress/SEO/GEO/AI-search article on wordprais.ru. Keep the hyper-realistic 24mm action-selfie photo style. Replace unrelated historical cosplay with WordPress development, site architecture, admin dashboards, plugins, themes, backups, security, hacked-site recovery, content publishing, SEO/GEO, analytics, schema, semantic clusters, and technical web work when the article topic is business/WordPress/SEO.
+Use all reference_image_urls as image_input. The first reference image is the identity anchor; the others are face-consistency references. identity_lock=true: keep the same face, glasses, approximate age, facial proportions, recognizability, skin texture, and real-camera look. Do not use stock people. No cap, no hood, no cartoon, no 3D, no anime, no plastic skin, no Latin letters, no English text. If text is needed, use short readable Russian Cyrillic only.`;
     const coverBody = `${coverTpl}\n\n${nanoToolFooter({
       tool: nanoToolName(),
       aspect_ratio: "16:9",
@@ -725,7 +1497,9 @@ ${JSON.stringify(state.seeds, null, 2)}
     const banTpl = stripBlueprintHeader(loadMdByModule(9)).replace(
       /\{\{40\.content\}\}/g,
       state.seoTitle!,
-    );
+    ) + `\n\nWORDPRAIS BANNER ADAPTATION:
+Use the Make blueprint banner logic from module 9, but adapt only the niche. Make a photorealistic 21:9 designer banner for wordprais.ru and the article topic above. Replace Kovcheg+/course/channel meanings with WordPress, SEO/GEO, AI-search visibility, website publishing, site audit, content automation, site repair/recovery, analytics, schema, and expert technical service.
+Use all reference_image_urls as image_input. The first reference image is the identity anchor; the others are face-consistency references. identity_lock=true: keep the same face, glasses, approximate age, facial proportions, recognizability, and realistic skin texture. No cap, no hood, no cartoon, no 3D, no anime, no plastic skin, no Latin letters, no English text. If text is needed, use short readable Russian Cyrillic only.`;
 
     const banFmt =
       (process.env.NANO_BANNER_FORMAT?.trim()?.toLowerCase() as "jpg" | "png") ??
@@ -747,8 +1521,11 @@ ${JSON.stringify(state.seeds, null, 2)}
     const uploadedWp = state.bannerNanoPublicUrl
       ? await wordpressUploadBannerIfConfigured(state.bannerNanoPublicUrl)
       : undefined;
+    if (typeof uploadedWp?.id === "number")
+      state.bannerWordpressMediaId = uploadedWp.id;
+    if (uploadedWp?.publicUrl) state.bannerWordpressPublicUrl = uploadedWp.publicUrl;
     state.midArticleBannerSrcUrl =
-      uploadedWp || state.bannerNanoPublicUrl || midBannerUrl;
+      uploadedWp?.publicUrl || state.bannerNanoPublicUrl || midBannerUrl;
     midBannerUrl = state.midArticleBannerSrcUrl;
   }
 
@@ -770,6 +1547,23 @@ ${JSON.stringify(state.seeds, null, 2)}
     artPrompt,
   );
 
+  artPrompt += `
+
+Strict publication gates:
+- Run seo-content-writer before the draft.
+- Run russian-humanizer after the draft.
+- Then act as content-structure-director and reject weak output yourself.
+- Then act as mayai-structure-guardian, html-semantics-guardian, keyword-topic-uniqueness-guardian, and meta-media-guardian before returning final HTML.
+- Mayai-like guide structure is mandatory: direct answer in the intro, article-toc, at least one JSON-LD script, one useful comparison/decision table, practical sections with enough detail, internal links to wordprais.ru, resources, FAQ and next steps.
+- Do not repeat paragraphs, do not pad with cloned filler blocks, and do not use generic headings such as "Практический нюанс внедрения".
+- Every image must have an http(s) src and useful Russian alt text. The article-banner image must be visible and relevant.
+- The article must stay tightly tied to the selected Wordstat keyword/topic, while title and angle remain unique against prior posts.
+- Return only final HTML with no html/body and no markdown.
+- Final HTML must contain >=12000 useful text characters, >=8 meaningful H2/H3, article-table-scroll + wp-block-table with inline borders/padding/caption/scope, article-banner, >=5 FAQ <details>, useful resources, and next steps.
+- Every H2/H3 heading must be unique. Never repeat generic headings like "Практический нюанс внедрения"; use specific headings tied to the current section.
+- In one or two logical places, naturally add this CTA text or a very close variant: "Остались вопросы или нужна помощь? Контакты в шапке профиля, или пишите в комментариях." It must fit the section and not look like a random ad.
+- If you cannot satisfy every item, return NEEDS_REWRITE instead of a short article.`;
+
   state.articleHtml = await cursorCloud(
     `${artPrompt}\n\nСтрого: только HTML без html/body, без markdown.`,
     "42 GEO/SEO статья",
@@ -784,6 +1578,25 @@ ${JSON.stringify(state.seeds, null, 2)}
   );
 
   /** 44 — JSON описания аплоада обложки поста как в blueprint */
+  state.qualityGates = computeQualityGates(state.articleHtml, state);
+  state.seoContentWriterPassed = state.qualityGates.seoContentWriterPassed;
+  state.geoAiSearchOptimizerPassed = state.qualityGates.geoAiSearchOptimizerPassed;
+  state.russianHumanizerPassed = state.qualityGates.russianHumanizerPassed;
+  state.mediaDirectorPassed = state.qualityGates.mediaDirectorPassed;
+  state.htmlSemanticsGuardianPassed = state.qualityGates.htmlSemanticsGuardianPassed;
+  state.metaMediaGuardianPassed = state.qualityGates.metaMediaGuardianPassed;
+  state.keywordTopicUniquenessGuardianPassed =
+    state.qualityGates.keywordTopicUniquenessGuardianPassed;
+  state.mayaiStructureGuardianPassed = state.qualityGates.mayaiStructureGuardianPassed;
+  state.contentStructureDirectorPassed =
+    state.qualityGates.contentStructureDirectorPassed;
+  const qualityFindings = articleQualityFindings(state.articleHtml, state);
+  if (qualityFindings.length > 0) {
+    writeQualityActionRequired(state, qualityFindings);
+    console.error("[quality] publish blocked: content-structure-director gate failed");
+    return;
+  }
+
   let imgJsonPrompt = stripBlueprintHeader(loadMdByModule(44));
   imgJsonPrompt = imgJsonPrompt.replace(/\{\{40\.content\}\}/g, state.seoTitle);
   const imgAns = await cursorCloud(
@@ -803,15 +1616,70 @@ ${JSON.stringify(state.seeds, null, 2)}
     console.warn("[warn] JSON модуля 44 не распарсен — заглушка метаданных.");
   }
 
-  const featuredCandidate =
-    process.env.FEATURED_IMAGE_URL?.trim() ||
-    state.coverNanoPublicUrl ||
-    DEFAULT_BANNER_IN_ARTICLE;
-
   const publishStatus =
     (process.env.WP_POST_STATUS || "publish").trim() || "publish";
   const postType =
     (process.env.WP_POST_TYPE || "posts").trim() || "posts";
+  const requirePermanentMedia = shouldRequirePermanentMedia(publishStatus);
+  const featuredCandidate = requirePermanentMedia
+    ? state.coverNanoPublicUrl
+    : process.env.FEATURED_IMAGE_URL?.trim() ||
+      state.coverNanoPublicUrl ||
+      DEFAULT_BANNER_IN_ARTICLE;
+
+  if (state.coverNanoPublicUrl && !state.coverWordpressMediaId) {
+    const uploadedCover = await wordpressUploadCoverIfConfigured(
+      state.coverNanoPublicUrl,
+      state.seoTitle ?? "cover",
+    );
+    if (typeof uploadedCover?.id === "number")
+      state.coverWordpressMediaId = uploadedCover.id;
+    if (uploadedCover?.publicUrl)
+      state.coverWordpressPublicUrl = uploadedCover.publicUrl;
+  }
+
+  if (
+    state.bannerWordpressPublicUrl &&
+    state.bannerNanoPublicUrl &&
+    state.articleHtml
+  ) {
+    state.articleHtml = state.articleHtml.replaceAll(
+      state.bannerNanoPublicUrl,
+      state.bannerWordpressPublicUrl,
+    );
+    state.midArticleBannerSrcUrl = state.bannerWordpressPublicUrl;
+  }
+
+  const coverOk =
+    typeof state.coverWordpressMediaId === "number" &&
+    isPermanentWordpressOrCdnUrl(state.coverWordpressPublicUrl);
+  const bannerOk =
+    typeof state.bannerWordpressMediaId === "number" &&
+    isPermanentWordpressOrCdnUrl(state.bannerWordpressPublicUrl);
+  if (requirePermanentMedia && (!coverOk || !bannerOk)) {
+    writeMediaActionRequired(state, {
+      missing: {
+        cover16x9: !coverOk,
+        banner21x9: !bannerOk,
+      },
+      cover: {
+        generatedUrl: state.coverNanoPublicUrl ?? null,
+        wordpressMediaId: state.coverWordpressMediaId ?? null,
+        wordpressPublicUrl: state.coverWordpressPublicUrl ?? null,
+      },
+      banner: {
+        generatedUrl: state.bannerNanoPublicUrl ?? null,
+        wordpressMediaId: state.bannerWordpressMediaId ?? null,
+        wordpressPublicUrl: state.bannerWordpressPublicUrl ?? null,
+      },
+      statePath: path.relative(ROOT, path.join(ART, "pipeline-state.json")),
+      mediaResultPath: path.relative(ROOT, path.join(ART, "media-result.json")),
+    });
+    console.error(
+      "[media] publish blocked: cover 16:9 and banner 21:9 must be permanent WordPress/CDN media",
+    );
+    return;
+  }
 
   const wpFinalPrompt = `# ФИНАЛ blueprint → WordPress (MCP wordpress_* на mcp-kv и др.)
 
@@ -826,6 +1694,10 @@ ${state.articleHtml}
 
 ## Обложечное изображение поста (featured)
 Публичный URL до загрузки: ${featuredCandidate}
+WordPress media ID: ${state.coverWordpressMediaId ?? "MISSING"}
+Permanent cover URL: ${state.coverWordpressPublicUrl ?? "MISSING"}
+Permanent 21:9 banner URL: ${state.bannerWordpressPublicUrl ?? "MISSING"}
+For publish status, use this existing WordPress media ID as featured_media. Do not use Unsplash or any stock fallback.
 При необходимости сначала **wordpress_upload_image_from_url** / **wordpress_upload_media**, затем ID в **featured_media** при создании записи.
 
 ## Метапакета изображения модуль Make 44

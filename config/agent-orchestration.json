@@ -1,0 +1,184 @@
+{
+  "version": 1,
+  "requiredSupervisor": {
+    "id": "content-structure-director",
+    "role": "Blocks publication unless the article matches the WordPrais mayai-like structure, useful depth, SEO/GEO/neuro-search coverage, media policy, and duplicate policy.",
+    "requiredBeforePublish": true,
+    "mustWriteArtifact": "qa-report.json"
+  },
+  "subagentSystem": {
+    "director": "content-structure-director",
+    "mode": "hard_gate",
+    "rule": "No subordinate agent may mark its stage passed by assertion only; every pass must be backed by measurable artifact checks.",
+    "subagents": [
+      {
+        "id": "queue-keyword-guardian",
+        "responsibility": "Keeps the selected Wordstat phrase pending until verified publication; blocks already processed or duplicate phrases."
+      },
+      {
+        "id": "duplicate-title-meta-guardian",
+        "responsibility": "Checks title, slug, meta, primary keyword and content-index collisions before publish."
+      },
+      {
+        "id": "keyword-topic-uniqueness-guardian",
+        "responsibility": "Blocks reused canonical topic keys, exact keyword reuse, and title/slug drift away from the selected Wordstat phrase."
+      },
+      {
+        "id": "mayai-structure-guardian",
+        "responsibility": "Checks mayai-like useful guide structure: direct answer, table of contents, dense practical blocks, comparison table, FAQ/details, next steps, and no thin filler sections."
+      },
+      {
+        "id": "html-semantics-guardian",
+        "responsibility": "Validates post-body HTML: no H1 in body, unique H2/H3, valid image src/alt, JSON-LD, accessible tables, internal links, and no duplicated paragraphs."
+      },
+      {
+        "id": "meta-media-guardian",
+        "responsibility": "Validates SEO title length, meta description length, featured cover, in-article banner, alt text, captions, and permanent WordPress/CDN media URLs."
+      },
+      {
+        "id": "seo-content-writer",
+        "responsibility": "Ensures useful article depth, search intent fit, keyword coverage, internal links, headings and practical sections."
+      },
+      {
+        "id": "geo-ai-search-optimizer",
+        "responsibility": "Ensures direct answers, FAQ/details, quotable blocks, comparison tables, schema-ready structure and AI-search clarity."
+      },
+      {
+        "id": "russian-humanizer",
+        "responsibility": "Removes AI-slop, empty formalism, template triplets, vague claims and unnatural Russian phrasing."
+      },
+      {
+        "id": "media-director",
+        "responsibility": "Requires Make blueprint based photorealistic 16:9 cover and 21:9 banner with identity_lock, uploaded to WordPress."
+      },
+      {
+        "id": "wordpress-publish-guardian",
+        "responsibility": "Publishes only after QA and media gates pass; never uses draft/empty/placeholder publication as success."
+      },
+      {
+        "id": "verification-guardian",
+        "responsibility": "Requires postId, public URL, HTTP 2xx, non-404 body, meaningful article content and visible media."
+      },
+      {
+        "id": "recovery-notifier",
+        "responsibility": "Writes actionRequired artifacts and sends Telegram notification when an external blocker remains."
+      }
+    ]
+  },
+  "requiredStages": [
+    {
+      "id": "seo-content-writer",
+      "required": true,
+      "artifactField": "seoContentWriterPassed"
+    },
+    {
+      "id": "geo-ai-search-optimizer",
+      "required": true,
+      "artifactField": "geoAiSearchOptimizerPassed"
+    },
+    {
+      "id": "russian-humanizer",
+      "required": true,
+      "artifactField": "russianHumanizerPassed"
+    },
+    {
+      "id": "media-director",
+      "required": true,
+      "artifactField": "mediaDirectorPassed"
+    },
+    {
+      "id": "keyword-topic-uniqueness-guardian",
+      "required": true,
+      "artifactField": "keywordTopicUniquenessGuardianPassed"
+    },
+    {
+      "id": "mayai-structure-guardian",
+      "required": true,
+      "artifactField": "mayaiStructureGuardianPassed"
+    },
+    {
+      "id": "html-semantics-guardian",
+      "required": true,
+      "artifactField": "htmlSemanticsGuardianPassed"
+    },
+    {
+      "id": "meta-media-guardian",
+      "required": true,
+      "artifactField": "metaMediaGuardianPassed"
+    },
+    {
+      "id": "content-structure-director",
+      "required": true,
+      "artifactField": "contentStructureDirectorPassed"
+    }
+  ],
+  "hardGates": {
+    "minimumFinalHtmlCharacters": 12000,
+    "minimumContentHeadingsH2H3": 8,
+    "minimumH2": 7,
+    "minimumH3": 3,
+    "minimumParagraphs": 24,
+    "minimumInternalLinks": 4,
+    "minimumArticleImages": 1,
+    "minimumJsonLdScripts": 1,
+    "minimumUsefulSectionCharacters": 180,
+    "maxThinSections": 1,
+    "minimumFaqDetails": 5,
+    "maxHumanizerSlopHits": 3,
+    "maxDuplicateHeadingOccurrences": 1,
+    "maxDuplicateParagraphOccurrences": 1,
+    "titleMinCharacters": 45,
+    "titleMaxCharacters": 120,
+    "metaDescriptionMinCharacters": 90,
+    "metaDescriptionMaxCharacters": 170,
+    "requiredHeadingUnique": true,
+    "requiredPrimaryKeywordCoverage": true,
+    "requiredMayaiLikeStructure": true,
+    "requiredJsonLd": true,
+    "requiredImageAltText": true,
+    "forbiddenGenericHeadings": [
+      "Практический нюанс внедрения",
+      "Важный нюанс",
+      "Дополнительный блок",
+      "Полезная информация",
+      "Что важно знать"
+    ],
+    "requiredHtmlMarkers": [
+      "article-table-scroll",
+      "wp-block-table",
+      "scope=\"col\"",
+      "article-banner",
+      "<details",
+      "article-toc",
+      "application/ld+json",
+      "Остались вопросы",
+      "пишите в комментариях"
+    ],
+    "forbiddenHtmlMarkers": [
+      "NEEDS_REWRITE",
+      "Lorem ipsum",
+      "Страница не найдена",
+      "Oops",
+      "error-404"
+    ],
+    "humanizerSlopMarkers": [
+      "важно отметить",
+      "следует отметить",
+      "в современном мире",
+      "в условиях стремительного",
+      "таким образом",
+      "данная статья",
+      "не только, но и",
+      "уникальный",
+      "революционный"
+    ],
+    "mediaRequiredForPublish": true,
+    "coverRequired": "16:9 WordPress media id and permanent URL",
+    "bannerRequired": "21:9 WordPress/media CDN URL inside article-banner"
+  },
+  "failurePolicy": {
+    "onStructureFail": "block_publish_keep_keyword_pending",
+    "onMediaFail": "block_publish_keep_keyword_pending",
+    "onDuplicateKeyword": "block_publish_keep_keyword_pending"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "automationDisplayName": "Вордпресс статьи — bytmaster34.ru",
+  "targetSite": {
+    "origin": "https://bytmaster34.ru",
+    "publicProfileUrls": [
+      "https://bytmaster34.ru/",
+      "https://bytmaster34.ru/blog/"
+    ],
+    "policy": "Внутренние ссылки и CTA только на домен bytmaster34.ru или относительные пути с корня сайта. Не подставлять бренды и реферальные ссылки чужих сервисов из статей-образцов."
+  },
+  "structureReference": {
+    "blueprintName": "RU SEO/GEO СТАТЬИ ДЛЯ БЛОГА 2026",
+    "exampleLayoutArticleUrl": "https://mayai.ru/avtomatizacziya-biznes-proczessov-kak-ii-upravlyaet-umnym-proizvodstvom-v-2026-godu/",
+    "referenceUsage": "Только порядок и тип блоков (оглавление, лид, 8+ H2/H3, врезки, таблица, баннер в теле, FAQ details, полезные ресурсы, блок «что дальше», вторичный FAQ при необходимости). Тексты, факты, имена и промо — не копировать.",
+    "minimumFinalHtmlCharacters": 12000,
+    "minimumContentHeadingsH2H3": 8,
+    "shortArticlePolicy": "Запрещено публиковать короткую статью, заметку, дайджест или пост-заглушку. Если проверенной фактуры недостаточно для длинной статьи, остановить выпуск и вернуть needs_more_research.",
+    "requiredWorkflowStages": [
+      "seo-content-writer",
+      "russian-humanizer"
+    ],
+    "requiredBlocks": [
+      "table_of_contents",
+      "lead",
+      "8_plus_h2_h3",
+      "callouts",
+      "html_table_exactly_like_HTML_STRUCTURE_WORDPRAIS_sample",
+      "faq",
+      "useful_resources",
+      "next_steps"
+    ],
+    "factPolicy": "No fake facts: цифры, даты, кейсы, сравнения, имена, цитаты и выводы о рынке только из Research или с явной пометкой requires_verification."
+  },
+  "nanoFromMcpKv": {
+    "preferredTools": ["nano_banana_pro", "nano_banana_2"],
+    "cover": { "aspect_ratio": "16:9", "role": "featured_image_after_upload" },
+    "banner": {
+      "aspect_ratio": "21:9",
+      "role": "mid_article_figure_before_first_major_h2_or_after_lead_per_seo_json"
+    },
+    "resolutionDefault": "2K",
+    "uploadPipeline": [
+      "После генерации временный URL → wordpress_upload_media (предпочтительно) или wordpress_upload_image_from_url",
+      "Обложку связать с постом: featured_media в wordpress_create_post / wordpress_update_post или wordpress_set_featured_image",
+      "В HTML заменить src баннера на постоянный URL из медиатеки сайта"
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "defaultSite": "wordprais",
+  "sites": {
+    "wordprais": {
+      "label": "wordprais.ru",
+      "wordstatAutomationConfig": "config/wordprais-wordstat-automation.json",
+      "publishedKeywordsPath": "data/wordstat-published-keywords.json",
+      "wordpressEnvSuffix": null
+    },
+    "bytmaster34": {
+      "label": "bytmaster34.ru",
+      "wordstatAutomationConfig": "config/bytmaster34-wordstat-automation.json",
+      "publishedKeywordsPath": "data/wordstat-published-keywords.bytmaster34.json",
+      "wordpressEnvSuffix": "BYTMASTER34"
+    }
+  }
+}

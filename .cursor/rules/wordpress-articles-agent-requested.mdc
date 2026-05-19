@@ -1,0 +1,12 @@
+---
+description: Включать при явном запросе автоматизации «Вордпресс статьи», wordprais.ru, структуры как mayai/blueprint 2026 с Nano 16:9 и баннером 21:9
+alwaysApply: false
+---
+
+Следуй навыку **`wordpress-articles`** и пошагово **`prompts/wordpress-articles/MASTER_PROMPT.md`**.
+
+- Целевой сайт и список допустимых внутренних URL: **`config/wordpress-articles.json`**.
+- Разметка HTML тела записи: **`prompts/wordpress-articles/HTML_STRUCTURE_WORDPRAIS.md`**.
+- Статьи-образцы (mayai.ru и др.) использовать **только** как образец **порядка блоков и типов секций**; не переносить чужие факты, лица, реферальные и промо-ссылки.
+- Изображения: MCP **`nano_banana_*`** → затем **`wordpress_upload_media`** и постоянные URL с домена публикации; обложка **16:9**, баннер в тексте **21:9**.
+- Публикация и антидубль — через стадии **`director-content-factory`** и скрипты из README («Вордпресс статьи»).

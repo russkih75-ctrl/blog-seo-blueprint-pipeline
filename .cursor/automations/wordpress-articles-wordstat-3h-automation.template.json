@@ -1,0 +1,35 @@
+{
+  "name": "{{AUTOMATION_NAME}}",
+  "prompts": [
+    {
+      "prompt": "Вставьте полный текст из файла .cursor/automations/wordpress-articles-wordstat-3h-automation.UNPACK.md — раздел «4. Полный шаблон промпта», после замены всех {{ПЛЕЙСХОЛДЕРОВ}} из §2."
+    }
+  ],
+  "model": "{{MODEL_SLUG}}",
+  "triggers": [
+    {
+      "cron": {
+        "cron": "{{CRON_EXPRESSION}}"
+      }
+    }
+  ],
+  "actions": [
+    {
+      "mcp": {
+        "server": {
+          "name": "{{MCP_SERVER_NAME}}",
+          "id": "{{MCP_SERVER_ID}}"
+        }
+      }
+    }
+  ],
+  "gitConfig": {
+    "repo": "{{GIT_REPO_HTTPS_URL}}",
+    "branch": "{{GIT_BRANCH_PRODUCTION}}",
+    "repos": ["{{GIT_REPO_HTTPS_URL}}"]
+  },
+  "agentOptions": {
+    "skipInstall": true
+  },
+  "memoryEnabled": true
+}

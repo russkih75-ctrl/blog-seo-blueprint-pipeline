@@ -4,8 +4,17 @@ dist/
 .env.*
 !.env.example
 !.env.mcp.example
+.telegram-agent-sessions.json
+.telegram-schedules.json
+.telegram-bot-chat-modes.json
+.telegram-wordstat-site-by-chat.json
 artifacts/
+vendor/
 *.log
+
+# Runtime snapshot очереди (peek/reserve); durable-публикации — data/wordstat-published-keywords.json
+data/wordstat-queue-last-selection.json
+data/wordstat-queue-last-selection.bytmaster34.json
 
 # локальные помощники для коммита (не в репозитории)
 commit-msg.txt
