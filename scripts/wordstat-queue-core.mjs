@@ -15,6 +15,14 @@ export const DEFAULT_PUBLISHED_PATH = path.join(
 );
 export const SEO_SITE_PROMOTION_INTENT = "intent:seo_site_promotion_general";
 
+/** Очередь Wordstat: `WORDSTAT_AUTOMATION_CONFIG` или дефолт wordprais. */
+export function resolveWordstatConfigPath() {
+  const rel = process.env.WORDSTAT_AUTOMATION_CONFIG?.trim();
+  if (rel)
+    return path.isAbsolute(rel) ? rel : path.join(ROOT, rel.replace(/^\/+/, ""));
+  return path.join(ROOT, "config", "wordprais-wordstat-automation.json");
+}
+
 /** Базовые SEO / географические / коммерческие «надстройки» для канонизации интента. */
 const SEO_PROMO_MODIFIER_TOKENS = new Set([
   "москва",

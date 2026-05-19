@@ -5,6 +5,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import { config as loadEnv } from "dotenv";
 import {
   ROOT,
   DEFAULT_PUBLISHED_PATH,
@@ -15,18 +16,21 @@ import {
   indexBlockingSets,
   canonicalIntentForPhrase,
   evaluateKeywordSkip,
+  resolveWordstatConfigPath,
 } from "./wordstat-queue-core.mjs";
 import {
   fetchWpRecentPublishedPosts,
   buildWpLiveDuplicateMap,
 } from "./lib/wp-public-live-queue-guard.mjs";
 
+loadEnv({ path: path.join(ROOT, ".env") });
+
 /** Только stdout JSON «как при обычном запуске», без записи state/last-out (диагностика в Telegram). */
 const PEEK_QUEUE =
   process.argv.includes("--peek") ||
   process.env.WORDSTAT_QUEUE_NEXT_PEEK === "1";
 const ART = path.join(ROOT, "artifacts");
-const CONFIG_PATH = path.join(ROOT, "config", "wordprais-wordstat-automation.json");
+const CONFIG_PATH = resolveWordstatConfigPath();
 const CONTENT_INDEX_PATH = path.join(ART, "content-index.json");
 const STATE_PATH = path.join(ART, "simple-keyword-queue.json");
 const LAST_OUT_PATH = path.join(ART, "wordstat-queue-last.json");

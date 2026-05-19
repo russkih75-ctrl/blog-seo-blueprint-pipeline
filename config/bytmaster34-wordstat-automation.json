@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "targetSite": "https://bytmaster34.ru/",
+  "blockedCanonicalTopicKeys": [],
+  "meta": {
+    "regionCode": 225,
+    "regionLabel": "Россия",
+    "snapshotDate": "2026-05-19",
+    "source": "manual_seed",
+    "device": "all",
+    "notes": "Стартовый каркас очереди для bytmaster34.ru. Заполните keywordQueue через Wordstat/YADryshko; затем npm run wp:mark-queue-duplicates при необходимости."
+  },
+  "excludedBrandedQueries": [],
+  "clusters": [
+    {
+      "id": "c_byt_blog",
+      "titleRu": "Быт: советы, ремонт техники, дом",
+      "priority": 0,
+      "draftLandingUrl": "/blog/"
+    }
+  ],
+  "keywordQueue": []
+}

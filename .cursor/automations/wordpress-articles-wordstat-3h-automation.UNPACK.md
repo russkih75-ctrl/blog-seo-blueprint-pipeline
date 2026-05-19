@@ -7,7 +7,7 @@
 | Файл | Зачем |
 |------|--------|
 | [wordpress-articles-wordstat-3h.md](./wordpress-articles-wordstat-3h.md) | Человекочитаемый туториал по полям UI Automations |
-| [wordpress-articles-wordstat-3h-automation.reference.example.json](./wordpress-articles-wordstat-3h-automation.reference.example.json) | Пример **полного** экспорта JSON (wordprais + bytmaster34 face refs) — ориентир по структуре |
+| [bytmaster34-wordpress-articles-3h.md](./bytmaster34-wordpress-articles-3h.md) | Пример второго сайта в том же репо: переменные окружения и файлы конфигов |
 | [wordpress-articles-wordstat-3h-automation.template.json](./wordpress-articles-wordstat-3h-automation.template.json) | Каркас ключей JSON с плейсхолдерами (не вставлять в UI с ключом `_comment`) |
 
 ---

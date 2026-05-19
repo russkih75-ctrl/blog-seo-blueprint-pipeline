@@ -3,6 +3,7 @@
  * Аудит очереди Wordstat: следующий publishable ключ и причины пропусков (без секретов).
  */
 import path from "node:path";
+import { config as loadEnv } from "dotenv";
 import {
   ROOT,
   DEFAULT_PUBLISHED_PATH,
@@ -15,13 +16,16 @@ import {
   canonicalIntentForPhrase,
   evaluateKeywordSkip,
   seoPromotionSkeleton,
+  resolveWordstatConfigPath,
 } from "./wordstat-queue-core.mjs";
 import {
   fetchWpRecentPublishedPosts,
   buildWpLiveDuplicateMap,
 } from "./lib/wp-public-live-queue-guard.mjs";
 
-const CONFIG_PATH = path.join(ROOT, "config", "wordprais-wordstat-automation.json");
+loadEnv({ path: path.join(ROOT, ".env") });
+
+const CONFIG_PATH = resolveWordstatConfigPath();
 const CONTENT_INDEX_PATH = path.join(ROOT, "artifacts", "content-index.json");
 const STATE_PATH = path.join(ROOT, "artifacts", "simple-keyword-queue.json");
 const JSON_ONLY = process.argv.includes("--json");

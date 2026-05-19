@@ -10,14 +10,18 @@ import {
   mkdirSync,
 } from "node:fs";
 import path from "node:path";
+import { config as loadEnv } from "dotenv";
 import {
   ROOT,
   normalizePhrase,
   sortQueueForSelection,
   canonicalIntentForPhrase,
+  resolveWordstatConfigPath,
 } from "./wordstat-queue-core.mjs";
 
-const CONFIG_PATH = path.join(ROOT, "config", "wordprais-wordstat-automation.json");
+loadEnv({ path: path.join(ROOT, ".env") });
+
+const CONFIG_PATH = resolveWordstatConfigPath();
 const WRITE = process.argv.includes("--write");
 
 function main() {
