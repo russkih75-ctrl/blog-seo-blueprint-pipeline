@@ -244,6 +244,20 @@ function loadQualityConfig() {
   }
 }
 
+/** Внутренние ссылки считаются по hostname из config/wordpress-articles.json (wordprais / bytmaster34 и т.д.). */
+function targetSiteInternalLinkRegex() {
+  try {
+    const p = path.join(ROOT, "config", "wordpress-articles.json");
+    const j = JSON.parse(readFileSync(p, "utf-8"));
+    let origin = String(j?.targetSite?.origin ?? "https://wordprais.ru").trim();
+    if (!origin.startsWith("http")) origin = `https://${origin}`;
+    const host = new URL(origin).hostname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`<a\\b[^>]+href=["']https?:\\/\\/${host}\\/`, "gi");
+  } catch {
+    return /<a\b[^>]+href=["']https?:\/\/wordprais\.ru\//gi;
+  }
+}
+
 function articleQualityFindings(html, state) {
   const cfg = loadQualityConfig();
   const hard = cfg.hardGates ?? {};
@@ -270,7 +284,7 @@ function articleQualityFindings(html, state) {
   const h2 = countMatches(html, /<h2\b/gi);
   const h3 = countMatches(html, /<h3\b/gi);
   const paragraphs = countMatches(html, /<p\b/gi);
-  const internalLinks = countMatches(html, /<a\b[^>]+href=["']https?:\/\/wordprais\.ru\//gi);
+  const internalLinks = countMatches(html, targetSiteInternalLinkRegex());
   const articleImages = countMatches(html, /<img\b/gi);
   const jsonLdScripts = countMatches(html, /<script\b[^>]+application\/ld\+json/gi);
   const details = countMatches(html, /<details\b/gi);

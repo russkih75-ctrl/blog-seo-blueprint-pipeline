@@ -19,5 +19,17 @@
       "draftLandingUrl": "/blog/"
     }
   ],
-  "keywordQueue": []
+  "keywordQueue": [
+    {
+      "id": "kw_byt_001",
+      "phrase": "как почистить фильтр стиральной машины",
+      "seedId": "seed_byt_01",
+      "seedPhrase": "уход за стиральной машиной",
+      "clusterId": "c_byt_blog",
+      "shows": 2100,
+      "priority": 10,
+      "queueStatus": "active",
+      "queueDedupeNote": "Стартовая тема для проверки контура bytmaster34.ru"
+    }
+  ]
 }
